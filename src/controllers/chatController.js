@@ -12,6 +12,8 @@ import { notifyAdmins } from '../services/adminNotificationService.js';
 const FASTAPI_URL = process.env.FASTAPI_URL;
 if (!FASTAPI_URL) {
     console.warn('[WARN] FASTAPI_URL is not defined in environment variables. Falling back to http://localhost:8000');
+} else {
+    console.log(`[CONNECTIVITY] Using FASTAPI_URL: ${FASTAPI_URL}`);
 }
 const api_url = FASTAPI_URL || 'http://localhost:8000';
 

@@ -13,6 +13,7 @@ const authUser = async (req, res) => {
 
         if (user && (await user.matchPassword(password))) {
             res.json({
+                status: 'ok',
                 _id: user._id,
                 name: user.name,
                 email: user.email,
@@ -50,6 +51,7 @@ const registerUser = async (req, res) => {
 
         if (user) {
             res.status(201).json({
+                status: 'ok',
                 _id: user._id,
                 name: user.name,
                 email: user.email,
