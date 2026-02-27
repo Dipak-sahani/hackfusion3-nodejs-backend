@@ -1,4 +1,5 @@
 import express from 'express';
+import multer from 'multer';
 import {
     getMedicines,
     getMedicineById,
@@ -8,13 +9,16 @@ import {
     stopMedicine,
     startMedicine,
     confirmDose,
-    toggleMedicinePrescriptionRequirement
+    toggleMedicinePrescriptionRequirement,
+    uploadMedicines
 } from '../controllers/medicineController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
 router.route('/').get(getMedicines).post(protect, admin, createMedicine);
+router.post('/upload', protect, admin, upload.single('file'), uploadMedicines);
 router
     .route('/:id')
     .get(getMedicineById)

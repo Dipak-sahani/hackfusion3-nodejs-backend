@@ -20,23 +20,28 @@ export const createDraftOrder = async (userId, orderItems) => {
         const unit = item.unit || existingMedicine?.unit || 'tablet';
         const price = existingMedicine?.pricePerUnit || 10; // Default Mock Price if not found
 
+        // Use quantityConverted if available (from AI), otherwise use raw quantity
+        const effectiveQuantity = item.quantityConverted || item.quantity;
+
         // STOCK VALIDATION: Check if medicine exists and has enough stock
         if (!existingMedicine) {
             throw new Error(`Medicine "${item.medicineName}" not found in global catalog.`);
         }
 
-        if (existingMedicine.currentStock < item.quantity) {
-            throw new Error(`Insufficient stock for "${item.medicineName}". Requested: ${item.quantity}, Available: ${existingMedicine.currentStock}`);
+        if (existingMedicine.currentStock < effectiveQuantity) {
+            throw new Error(`Insufficient stock for "${item.medicineName}". Requested: ${effectiveQuantity}, Available: ${existingMedicine.currentStock}`);
         }
 
-        const cost = price * item.quantity;
+        const cost = price * effectiveQuantity;
         totalEstimatedAmount += cost;
 
         processedItems.push({
             medicine: existingMedicine?._id, // Link if exists
             medicineName: item.medicineName,
-            quantity: item.quantity,
-            unit: unit,
+            quantity: effectiveQuantity,
+            unit: 'tablet', // Everything is normalized to tablets in the draft now
+            rawQuantity: item.quantity,
+            rawUnit: unit,
             pricePerUnit: price,
             dailyConsumption: item.dailyConsumption,
             reminderTimes: item.reminderTimes

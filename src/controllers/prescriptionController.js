@@ -11,7 +11,7 @@ import { readFile } from 'fs/promises';
 import { normalizeMedicines } from '../services/medicineService.js';
 import path from 'path';
 
-const FASTAPI_URL = process.env.FASTAPI_URL || 'http://127.0.0.1:8000';
+const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8000';
 
 // @desc    Upload and Process Prescription
 // @route   POST /api/prescriptions/upload

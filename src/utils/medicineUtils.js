@@ -12,9 +12,9 @@ export const normalizeToTablet = (quantity, unit, tabletsPerStrip = 10) => {
 
     const normalizedUnit = unit?.toLowerCase();
 
-    if (normalizedUnit === 'strip') {
+    if (normalizedUnit === 'strip' || normalizedUnit === 'strips') {
         return quantity * tabletsPerStrip;
-    } else if (normalizedUnit === 'tablet' || !normalizedUnit) {
+    } else if (normalizedUnit === 'tablet' || normalizedUnit === 'tablets' || !normalizedUnit) {
         return quantity;
     } else {
         throw new Error(`Invalid unit: ${unit}. Supported units are 'tablet' and 'strip'.`);

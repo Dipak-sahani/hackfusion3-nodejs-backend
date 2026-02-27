@@ -4,6 +4,7 @@ import DoseLog from '../models/DoseLog.js';
 import InventoryLog from '../models/InventoryLog.js';
 import { calculateRefillDate, normalizeToTablet } from '../utils/medicineUtils.js';
 import { sendUserNotification } from '../services/notificationService.js';
+import * as XLSX from 'xlsx';
 
 // @desc    Get all medicines
 // @route   GET /api/medicines
@@ -351,6 +352,63 @@ const toggleMedicinePrescriptionRequirement = async (req, res) => {
     }
 };
 
+// @desc    Bulk upload medicines from Excel/CSV
+// @route   POST /api/medicines/upload
+// @access  Private/Admin
+const uploadMedicines = async (req, res) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ message: 'No file uploaded' });
+        }
+
+        const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+        const sheetName = workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+
+        if (!rows || rows.length === 0) {
+            return res.status(400).json({ message: 'The uploaded file contains no data rows' });
+        }
+
+        // Flexible column name mapping (case-insensitive, trimmed)
+        const mapKey = (key) => {
+            const k = key.toLowerCase().trim().replace(/[_\-\.]/g, ' ');
+            if (k.includes('product name') || k === 'name' || k === 'productname') return 'name';
+            if (k.includes('product id') || k === 'productid') return 'productId';
+            if (k === 'pzn') return 'pzn';
+            if (k.includes('price') || k.includes('price rec') || k === 'pricerec') return 'priceRec';
+            if (k.includes('package') || k.includes('package size') || k === 'packagesize') return 'packageSize';
+            if (k.includes('description') || k === 'descriptions') return 'description';
+            return null;
+        };
+
+        const medicines = rows.map(row => {
+            const mapped = {};
+            for (const [key, value] of Object.entries(row)) {
+                const field = mapKey(key);
+                if (field) {
+                    mapped[field] = field === 'priceRec' ? parseFloat(value) || 0 : String(value).trim();
+                }
+            }
+            return mapped;
+        }).filter(m => m.name); // only keep rows that have a product name
+
+        if (medicines.length === 0) {
+            return res.status(400).json({ message: 'No valid medicine rows found. Ensure your file has a "product name" column.' });
+        }
+
+        const inserted = await Medicine.insertMany(medicines);
+
+        res.status(201).json({
+            message: `Successfully uploaded ${inserted.length} medicines`,
+            count: inserted.length
+        });
+    } catch (error) {
+        console.error('Upload error:', error);
+        res.status(500).json({ message: error.message || 'Failed to process file' });
+    }
+};
+
 export {
     getMedicines,
     getMedicineById,
@@ -360,5 +418,6 @@ export {
     stopMedicine,
     startMedicine,
     confirmDose,
-    toggleMedicinePrescriptionRequirement
+    toggleMedicinePrescriptionRequirement,
+    uploadMedicines
 };

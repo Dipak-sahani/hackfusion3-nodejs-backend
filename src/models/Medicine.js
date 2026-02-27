@@ -11,6 +11,14 @@ const MedicineSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    productId: {
+        type: String,
+        trim: true
+    },
+    pzn: {
+        type: String,
+        trim: true
+    },
     currentStock: {
         type: Number,
         default: 0
@@ -25,6 +33,10 @@ const MedicineSchema = new mongoose.Schema({
     },
     pricePerUnit: {
         type: Number, // Price per unit for order cost calculation
+        default: 0
+    },
+    priceRec: {
+        type: Number, // Recommended/Recent Price
         default: 0
     },
     lastOrderedAt: {
@@ -54,6 +66,14 @@ const MedicineSchema = new mongoose.Schema({
     requiresPrescription: {
         type: Boolean,
         default: true
+    },
+    packageSize: {
+        type: String,
+        trim: true
+    },
+    description: {
+        type: String,
+        trim: true
     }
 }, { timestamps: true });
 

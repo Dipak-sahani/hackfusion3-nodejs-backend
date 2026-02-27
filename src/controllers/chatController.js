@@ -9,7 +9,11 @@ import Prescription from '../models/Prescription.js';
 import { createDraftOrder } from '../services/orderService.js'; // Use draft creation
 import { notifyAdmins } from '../services/adminNotificationService.js';
 
-const FASTAPI_URL = process.env.FASTAPI_URL || 'http://127.0.0.1:8000';
+const FASTAPI_URL = process.env.FASTAPI_URL;
+if (!FASTAPI_URL) {
+    console.warn('[WARN] FASTAPI_URL is not defined in environment variables. Falling back to http://localhost:8000');
+}
+const api_url = FASTAPI_URL || 'http://localhost:8000';
 
 export const handleChatMessage = async (req, res) => {
     try {
@@ -177,6 +181,7 @@ export const handleChatMessage = async (req, res) => {
                             medicineName: o.medicine_name,
                             quantity: o.quantity,
                             unit: o.unit || 'tablet',
+                            quantityConverted: o.quantity_converted, // Map FastAPI snake_case to camelCase
                             dailyConsumption: o.daily_consumption || 1, // Default to 1
                             reminderTimes: o.reminder_times || [] // Extract if AI provided it
                         }));
