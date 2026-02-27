@@ -9,13 +9,12 @@ import Prescription from '../models/Prescription.js';
 import { createDraftOrder } from '../services/orderService.js'; // Use draft creation
 import { notifyAdmins } from '../services/adminNotificationService.js';
 
-const FASTAPI_URL = process.env.FASTAPI_URL;
-if (!FASTAPI_URL) {
+const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8000';
+if (!process.env.FASTAPI_URL) {
     console.warn('[WARN] FASTAPI_URL is not defined in environment variables. Falling back to http://localhost:8000');
 } else {
     console.log(`[CONNECTIVITY] Using FASTAPI_URL: ${FASTAPI_URL}`);
 }
-const api_url = FASTAPI_URL || 'http://localhost:8000';
 
 export const handleChatMessage = async (req, res) => {
     try {
