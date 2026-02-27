@@ -301,7 +301,14 @@ export const handleChatMessage = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Chat Controller Global Error:', error);
+        console.error('Chat Controller Global Error:', {
+            message: error.message,
+            stack: error.stack,
+            url: error.config?.url,
+            method: error.config?.method,
+            status: error.response?.status,
+            data: error.response?.data
+        });
         res.json({
             type: 'chat',
             message: "I'm so sorry, dear, but my system is taking a little nap right now. 💤 I'm still here for you, though! Could you please try saying that again in a moment? I'll be ready and waiting!",
