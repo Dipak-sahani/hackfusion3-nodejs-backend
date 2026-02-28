@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import Notification from '../models/Notification.js';
 
 // @desc    Get user notifications
@@ -17,6 +18,9 @@ const getNotifications = async (req, res) => {
 // @access  Private
 const markAsRead = async (req, res) => {
     try {
+        if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+            return res.status(400).json({ message: 'Invalid notification ID format' });
+        }
         const notification = await Notification.findOne({ _id: req.params.id, user: req.user._id });
 
         if (notification) {
@@ -31,4 +35,19 @@ const markAsRead = async (req, res) => {
     }
 };
 
-export { getNotifications, markAsRead };
+// @desc    Mark all notifications as read
+// @route   PUT /api/notifications/read-all
+// @access  Private
+const markAllAsRead = async (req, res) => {
+    try {
+        await Notification.updateMany(
+            { user: req.user._id, isRead: false },
+            { $set: { isRead: true } }
+        );
+        res.json({ message: 'All notifications marked as read' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export { getNotifications, markAsRead, markAllAsRead };
