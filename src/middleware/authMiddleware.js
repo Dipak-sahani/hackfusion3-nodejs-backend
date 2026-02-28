@@ -1,7 +1,6 @@
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import User from '../models/User.js';
-import Doctor from '../models/Doctor.js';
 
 const protect = async (req, res, next) => {
     let token;
@@ -12,18 +11,9 @@ const protect = async (req, res, next) => {
     ) {
         try {
             token = req.headers.authorization.split(' ')[1];
-            // console.log(`[AUTH] Token received: ${token.substring(0, 10)}...`);
             const decoded = jwt.verify(token, process.env.JWT_SECRET);
-            // console.log(`[AUTH] Decoded ID: ${decoded.id}, Role: ${decoded.role}`);
 
-            if (decoded.role === 'doctor') {
-                req.user = await Doctor.findById(decoded.id).select('-password');
-                if (req.user) req.user.role = 'doctor';
-            } else {
-                // console.log(decoded.id);
-
-                req.user = await User.findById(decoded.id).select('-password');
-            }
+            req.user = await User.findById(decoded.id).select('-password');
 
             if (!req.user) {
                 // console.log(req.user);

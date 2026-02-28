@@ -5,12 +5,32 @@ const userSchema = new mongoose.Schema({
     name: { type: String, required: true },
     email: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    role: { type: String, enum: ['admin', 'customer'], default: 'customer' },
+    role: { type: String, enum: ['admin', 'customer', 'doctor'], default: 'customer' },
     phone: { type: String },
     address: { type: String },
     dateOfBirth: { type: Date }, // Added for medical age verification
     fcmToken: { type: String }, // For push notifications
-    familyMembers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'FamilyMember' }]
+    familyMembers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'FamilyMember' }],
+
+    // Doctor specific fields
+    specialization: { type: String },
+    mode: {
+        type: [String],
+        enum: ["online", "offline"],
+        default: ["online"]
+    },
+    isVerified: {
+        type: Boolean,
+        default: false
+    },
+    availability: [{
+        date: {
+            type: String, // YYYY-MM-DD
+        },
+        slots: [{
+            type: String // e.g., "10:00 AM", "02:30 PM"
+        }]
+    }]
 }, {
     timestamps: true
 });

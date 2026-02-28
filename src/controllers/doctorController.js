@@ -1,4 +1,4 @@
-import Doctor from '../models/Doctor.js';
+import User from '../models/User.js';
 import Appointment from '../models/Appointment.js';
 import { generateToken } from '../utils/authUtils.js';
 
@@ -9,16 +9,17 @@ export const registerDoctor = async (req, res) => {
     const { name, email, password, specialization, mode } = req.body;
 
     try {
-        const doctorExists = await Doctor.findOne({ email });
+        const doctorExists = await User.findOne({ email });
 
         if (doctorExists) {
             return res.status(400).json({ message: 'Doctor already exists' });
         }
 
-        const doctor = await Doctor.create({
+        const doctor = await User.create({
             name,
             email,
             password,
+            role: 'doctor',
             specialization,
             mode: mode || ["online"]
         });
@@ -47,7 +48,7 @@ export const loginDoctor = async (req, res) => {
     const { email, password } = req.body;
 
     try {
-        const doctor = await Doctor.findOne({ email });
+        const doctor = await User.findOne({ email });
 
         if (doctor && (await doctor.matchPassword(password))) {
             res.json({
@@ -71,7 +72,7 @@ export const loginDoctor = async (req, res) => {
 // @access  Private (Doctor)
 export const getDoctorProfile = async (req, res) => {
     try {
-        const doctor = await Doctor.findById(req.user._id).select('-password');
+        const doctor = await User.findById(req.user._id).select('-password');
         if (!doctor) {
             return res.status(404).json({ message: 'Doctor not found' });
         }
@@ -88,7 +89,7 @@ export const updateAvailability = async (req, res) => {
     const { availability } = req.body; // Array of { date, slots }
 
     try {
-        const doctor = await Doctor.findById(req.user._id);
+        const doctor = await User.findById(req.user._id);
 
         if (doctor) {
             doctor.availability = availability;
@@ -173,7 +174,7 @@ export const addConsultationNotes = async (req, res) => {
 // @access  Private (User)
 export const getAllDoctors = async (req, res) => {
     try {
-        const doctors = await Doctor.find({}).select('-password');
+        const doctors = await User.find({ role: 'doctor' }).select('-password');
         res.json(doctors);
     } catch (error) {
         res.status(500).json({ message: error.message });

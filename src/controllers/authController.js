@@ -33,7 +33,7 @@ const authUser = async (req, res) => {
 // @route   POST /api/auth/register
 // @access  Public
 const registerUser = async (req, res) => {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, specialization, mode } = req.body;
 
     try {
         const userExists = await User.findOne({ email });
@@ -42,13 +42,13 @@ const registerUser = async (req, res) => {
             return res.status(400).json({ message: 'User already exists' });
         }
 
-        // Removed restriction for single admin to allow amol@gmail.com and others to be created/promoted easily
-
         const user = await User.create({
             name,
             email,
             password,
             role: role || 'customer', // Default to customer if not specified
+            specialization,
+            mode: mode || (role === 'doctor' ? ["online"] : undefined),
         });
 
         if (user) {
@@ -58,6 +58,7 @@ const registerUser = async (req, res) => {
                 name: user.name,
                 email: user.email,
                 role: user.role,
+                specialization: user.specialization,
                 token: generateToken(user._id, user.role),
             });
         } else {

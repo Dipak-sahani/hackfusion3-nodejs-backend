@@ -1,25 +1,27 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
+import User from './src/models/User.js';
+
 dotenv.config();
 
-const MONGO_URI = process.env.DB_URI || 'mongodb://localhost:27017/myapp';
-
-async function checkUser(id) {
+const checkUser = async () => {
     try {
-        await mongoose.connect(MONGO_URI);
-        const User = mongoose.model('User', new mongoose.Schema({}));
-        const user = await User.findById(id).lean();
+        await mongoose.connect(process.env.MONGO_URI);
+        const user = await User.findOne({ email: 'amol@gmail.com' });
         if (user) {
-            console.log("MATCH FOUND: ID belongs to a USER.");
-            console.log(JSON.stringify(user, null, 2));
+            console.log('User found:', JSON.stringify({
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role
+            }, null, 2));
         } else {
-            console.log("No user found with this ID.");
+            console.log('User not found: amol@gmail.com');
         }
-        process.exit(0);
-    } catch (err) {
-        console.error(err);
-        process.exit(1);
+        await mongoose.connection.close();
+    } catch (error) {
+        console.error('Error:', error);
     }
-}
+};
 
-checkUser(process.argv[2]);
+checkUser();

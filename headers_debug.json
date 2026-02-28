@@ -1,0 +1,22 @@
+{
+  "headers": [
+    "product id",
+    "Product Name",
+    "Prescription Required (Yes/No)",
+    "pzn",
+    "Quantity",
+    "price rec",
+    "package size",
+    "descriptions"
+  ],
+  "sample": [
+    16066,
+    "Panthenol Spray, 46,3 mg/g Schaum zur Anwendung auf der Haut",
+    "No",
+    "04020784",
+    1,
+    16.95,
+    "130 g",
+    "Schaumspray zur Anwendung auf der Haut. Fördert die Regeneration gereizter oder geschädigter Haut und spendet Feuchtigkeit."
+  ]
+}
