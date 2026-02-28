@@ -42,12 +42,7 @@ const registerUser = async (req, res) => {
             return res.status(400).json({ message: 'User already exists' });
         }
 
-        if (role === 'admin') {
-            const adminExists = await User.findOne({ role: 'admin' });
-            if (adminExists) {
-                return res.status(400).json({ message: 'An admin already exists. Only one admin is allowed.' });
-            }
-        }
+        // Removed restriction for single admin to allow amol@gmail.com and others to be created/promoted easily
 
         const user = await User.create({
             name,
