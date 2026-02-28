@@ -23,7 +23,24 @@ const app = express();
 app.use(express.json()); // Parse JSON bodies
 app.use(morgan('dev')); // Logging
 app.use(helmet()); // Security headers
-app.use(cors()); // Enable CORS
+// Allow only specific origins
+const allowedOrigins = [
+  "https://hackfusion-admin.netlify.app",
+  "http://localhost:5173"
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps or curl)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from the specified Origin.`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true // if you need cookies/auth
+}));
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 
 
