@@ -25,6 +25,8 @@ app.use(morgan('dev')); // Logging
 app.use(helmet()); // Security headers
 // Allow only specific origins
 const allowedOrigins = [
+  "https://hackfusion-admin.netlify.app",
+
   "https://hackfusion-admin.netlify.app/",
   "http://localhost:5173",
 
