@@ -12,12 +12,15 @@ import {
     toggleMedicinePrescriptionRequirement,
     uploadMedicines
 } from '../controllers/medicineController.js';
+import { getMissingMedicines, resolveMissingMedicine } from '../controllers/missingMedicineController.js';
 import { protect, admin } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
 router.route('/').get(getMedicines).post(protect, admin, createMedicine);
+router.route('/missing').get(protect, admin, getMissingMedicines);
+router.route('/missing/:id').delete(protect, admin, resolveMissingMedicine);
 router.post('/upload', protect, admin, upload.single('file'), uploadMedicines);
 router
     .route('/:id')
