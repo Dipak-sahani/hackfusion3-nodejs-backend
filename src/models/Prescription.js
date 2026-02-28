@@ -53,7 +53,7 @@ const prescriptionSchema = new mongoose.Schema({
         action: String, // e.g., 'DATA_EDITED', 'APPROVED', 'REJECTED'
         doctorId: {
             type: mongoose.Schema.Types.ObjectId,
-            ref: 'Doctor'
+            ref: 'User'
         },
         changes: Object, // Store what was changed
         notes: String,

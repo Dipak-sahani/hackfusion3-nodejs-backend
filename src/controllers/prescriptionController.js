@@ -4,7 +4,6 @@ import fs from 'fs';
 import crypto from 'crypto';
 import axios from 'axios';
 import FormData from 'form-data';
-import Doctor from '../models/Doctor.js';
 import User from '../models/User.js';
 import { supabase } from '../services/supabaseClient.js';
 import { readFile } from 'fs/promises';
@@ -142,7 +141,7 @@ export const uploadPrescription = async (req, res) => {
         // 7. If suspicious, create Manual Review Queue entry and assign to random doctor
         if (status === 'MANUAL_REVIEW' || (suspiciousScore && suspiciousScore > 70)) {
             // Find a random online doctor
-            const doctors = await Doctor.find({ isVerified: true });
+            const doctors = await User.find({ role: 'doctor', isVerified: true });
             let assignedDoctorId = null;
             if (doctors.length > 0) {
                 const randomIndex = Math.floor(Math.random() * doctors.length);

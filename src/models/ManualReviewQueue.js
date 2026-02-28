@@ -12,11 +12,11 @@ const manualReviewQueueSchema = new mongoose.Schema({
     },
     assignedDoctorId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Doctor'
+        ref: 'User'
     },
     reviewedByDoctorId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Doctor'
+        ref: 'User'
     },
     reviewNotes: {
         type: String

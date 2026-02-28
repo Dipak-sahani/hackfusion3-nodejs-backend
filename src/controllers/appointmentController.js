@@ -1,5 +1,5 @@
+import User from '../models/User.js';
 import Appointment from '../models/Appointment.js';
-import Doctor from '../models/Doctor.js';
 import crypto from 'crypto';
 
 // @desc    Book an appointment
@@ -10,7 +10,7 @@ export const bookAppointment = async (req, res) => {
 
     try {
         // 1. Validate doctor exists
-        const doctor = await Doctor.findById(doctorId);
+        const doctor = await User.findById(doctorId);
         if (!doctor) {
             return res.status(404).json({ message: 'Doctor not found' });
         }
