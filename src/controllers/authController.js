@@ -35,16 +35,17 @@ const authUser = async (req, res) => {
 const registerUser = async (req, res) => {
     const { name, email, password, role, specialization, mode } = req.body;
 
+    const normalizedEmail = email.toLowerCase().trim();
     try {
-        const userExists = await User.findOne({ email });
+        const userExists = await User.findOne({ email: normalizedEmail });
 
         if (userExists) {
-            return res.status(400).json({ message: 'User already exists' });
+            return res.status(400).json({ message: `User with email ${normalizedEmail} already exists` });
         }
 
         const user = await User.create({
             name,
-            email,
+            email: normalizedEmail,
             password,
             role: role || 'customer', // Default to customer if not specified
             specialization,

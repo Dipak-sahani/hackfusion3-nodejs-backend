@@ -8,8 +8,9 @@ import { generateToken } from '../utils/authUtils.js';
 export const registerDoctor = async (req, res) => {
     const { name, email, password, specialization, mode } = req.body;
 
+    const normalizedEmail = email.toLowerCase().trim();
     try {
-        const doctorExists = await User.findOne({ email });
+        const doctorExists = await User.findOne({ email: normalizedEmail });
 
         if (doctorExists) {
             return res.status(400).json({ message: 'Doctor already exists' });
@@ -17,7 +18,7 @@ export const registerDoctor = async (req, res) => {
 
         const doctor = await User.create({
             name,
-            email,
+            email: normalizedEmail,
             password,
             role: 'doctor',
             specialization,
