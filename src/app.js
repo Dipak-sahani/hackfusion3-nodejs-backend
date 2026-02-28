@@ -15,6 +15,7 @@ import aiRoutes from './routes/aiRoutes.js';
 import doctorRoutes from './routes/doctorRoutes.js';
 import appointmentRoutes from './routes/appointmentRoutes.js';
 import prescriptionRoutes from './routes/prescriptionRoutes.js';
+import debugRoutes from './routes/debugRoutes.js';
 
 const app = express();
 
@@ -39,6 +40,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/doctor', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
+app.use('/api/debug', debugRoutes);
 
 // Routes placeholder
 app.get('/', (req, res) => {
