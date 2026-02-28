@@ -379,29 +379,47 @@ const uploadMedicines = async (req, res) => {
             if (k.includes('price') || k.includes('price rec') || k === 'pricerec') return 'priceRec';
             if (k.includes('package') || k.includes('package size') || k === 'packagesize') return 'packageSize';
             if (k.includes('description') || k === 'descriptions') return 'description';
+            if (k.includes('prescription') || k.includes('required')) return 'requiresPrescription';
             return null;
         };
 
-        const medicines = rows.map(row => {
+        const mappedMedicines = rows.map(row => {
             const mapped = {};
             for (const [key, value] of Object.entries(row)) {
                 const field = mapKey(key);
                 if (field) {
-                    mapped[field] = field === 'priceRec' ? parseFloat(value) || 0 : String(value).trim();
+                    if (field === 'priceRec') {
+                        const price = parseFloat(value) || 0;
+                        mapped.priceRec = price;
+                        mapped.pricePerUnit = price; // Sync priceRec to pricePerUnit by default
+                    } else if (field === 'requiresPrescription') {
+                        mapped.requiresPrescription = String(value).toLowerCase().includes('yes');
+                    } else {
+                        mapped[field] = String(value).trim();
+                    }
                 }
             }
             return mapped;
-        }).filter(m => m.name); // only keep rows that have a product name
+        }).filter(m => m.name && m.pzn); // only keep rows that have a product name and pzn
 
-        if (medicines.length === 0) {
-            return res.status(400).json({ message: 'No valid medicine rows found. Ensure your file has a "product name" column.' });
+        if (mappedMedicines.length === 0) {
+            return res.status(400).json({ message: 'No valid medicine rows found. Ensure your file has "product name" and "pzn" columns.' });
         }
 
-        const inserted = await Medicine.insertMany(medicines);
+        // Bulk UPSERT logic
+        let processedCount = 0;
+        for (const med of mappedMedicines) {
+            await Medicine.findOneAndUpdate(
+                { pzn: med.pzn },
+                { $set: med },
+                { upsert: true, new: true, runValidators: true }
+            );
+            processedCount++;
+        }
 
         res.status(201).json({
-            message: `Successfully uploaded ${inserted.length} medicines`,
-            count: inserted.length
+            message: `Successfully processed ${processedCount} medicines`,
+            count: processedCount
         });
     } catch (error) {
         console.error('Upload error:', error);

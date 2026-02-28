@@ -17,7 +17,8 @@ const MedicineSchema = new mongoose.Schema({
     },
     pzn: {
         type: String,
-        trim: true
+        trim: true,
+        unique: true
     },
     currentStock: {
         type: Number,
@@ -65,7 +66,7 @@ const MedicineSchema = new mongoose.Schema({
     },
     requiresPrescription: {
         type: Boolean,
-        default: true
+        default: false
     },
     packageSize: {
         type: String,
