@@ -42,11 +42,18 @@ const registerUser = async (req, res) => {
             return res.status(400).json({ message: 'User already exists' });
         }
 
+        if (role === 'admin') {
+            const adminExists = await User.findOne({ role: 'admin' });
+            if (adminExists) {
+                return res.status(400).json({ message: 'An admin already exists. Only one admin is allowed.' });
+            }
+        }
+
         const user = await User.create({
             name,
             email,
             password,
-            role: role || 'customer', // Default to customer if not specified, allows admin creation via API for now (should be restricted in prod)
+            role: role || 'customer', // Default to customer if not specified
         });
 
         if (user) {
