@@ -33,6 +33,7 @@ const authUser = async (req, res) => {
 // @route   POST /api/auth/register
 // @access  Public
 const registerUser = async (req, res) => {
+    console.log(`[AUTH] Registration Request Body:`, JSON.stringify(req.body, null, 2));
     const { name, email, password, role, specialization, mode } = req.body;
 
     const normalizedEmail = email.toLowerCase().trim();
@@ -40,19 +41,35 @@ const registerUser = async (req, res) => {
         const userExists = await User.findOne({ email: normalizedEmail });
 
         if (userExists) {
+            console.log(`[AUTH] Registration failed: User ${normalizedEmail} already exists`);
             return res.status(400).json({ message: `User with email ${normalizedEmail} already exists` });
         }
+
+        console.log(`[AUTH] Creating user with role: ${role || 'customer'} (intended)`);
+
+        console.log(`[AUTH] Intended Role from Request: "${role}" (Type: ${typeof role})`);
+
+        const userRole = (role && ['admin', 'customer', 'doctor'].includes(role.toLowerCase().trim()))
+            ? role.toLowerCase().trim()
+            : 'customer';
+
+        console.log(`[AUTH] Final Role assigned to model: "${userRole}"`);
 
         const user = await User.create({
             name,
             email: normalizedEmail,
             password,
-            role: role || 'customer', // Default to customer if not specified
+            role: userRole,
             specialization,
-            mode: mode || (role === 'doctor' ? ["online"] : undefined),
+            mode: mode || (userRole === 'doctor' ? ["online"] : undefined),
         });
 
         if (user) {
+            console.log(`[AUTH] User created successfully:`, JSON.stringify({
+                id: user._id,
+                email: user.email,
+                role: user.role
+            }, null, 2));
             res.status(201).json({
                 status: 'ok',
                 _id: user._id,
