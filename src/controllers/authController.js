@@ -12,13 +12,6 @@ const authUser = async (req, res) => {
         const user = await User.findOne({ email });
 
         if (user && (await user.matchPassword(password))) {
-            // Temporary auto-promotion for amol@gmail.com to ensure admin access
-            if (user.email === 'amol@gmail.com' && user.role !== 'admin') {
-                console.log(`[AUTH] Auto-promoting ${user.email} to admin`);
-                user.role = 'admin';
-                await user.save();
-            }
-
             res.json({
                 status: 'ok',
                 _id: user._id,
