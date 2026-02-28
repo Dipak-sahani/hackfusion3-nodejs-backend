@@ -180,6 +180,39 @@ export const updateUserMedicineStock = async (req, res) => {
     }
 };
 
+/**
+ * Helper to get the next occurrence of a time string in IST (+5:30)
+ * @param {string} timeStr - e.g., "1:15 am" or "02:30 PM"
+ * @param {boolean} forceTomorrow - if true, always schedule for tomorrow (used for rescheduling after dose)
+ * @returns {number} - Unix timestamp in seconds
+ */
+const getNextISTTimestamp = (timeStr, forceTomorrow = false) => {
+    const match = timeStr.match(/(\d+)(?::(\d+))?\s*([AP]M)?/i);
+    if (!match) return Math.floor(Date.now() / 1000);
+
+    let hours = parseInt(match[1]);
+    let minutes = match[2] ? parseInt(match[2]) : 0;
+    let ampm = match[3] ? match[3].toUpperCase() : '';
+
+    if (ampm === 'PM' && hours < 12) hours += 12;
+    else if (ampm === 'AM' && hours === 12) hours = 0;
+
+    const IST_OFFSET = 5.5 * 3600 * 1000;
+    const nowUTC = new Date();
+    const nowIST = new Date(nowUTC.getTime() + IST_OFFSET);
+
+    const fireTimeIST = new Date(nowIST);
+    fireTimeIST.setHours(hours, minutes, 0, 0);
+
+    // If time has passed today, or if we force tomorrow
+    if (forceTomorrow || fireTimeIST < nowIST) {
+        fireTimeIST.setDate(fireTimeIST.getDate() + 1);
+    }
+
+    // Convert IST back to UTC timestamp
+    return Math.floor((fireTimeIST.getTime() - IST_OFFSET) / 1000);
+};
+
 // @desc    Update medicine reminder settings
 // @route   PUT /api/user/medicines/:id/reminders
 // @access  Private
@@ -231,26 +264,9 @@ export const updateUserMedicineReminders = async (req, res) => {
 
                 const times = reminderTimes || currentMed.reminderTimes;
                 for (const timeStr of times) {
-                    const match = timeStr.match(/(\d+)(?::(\d+))?\s*([AP]M)?/i);
-                    if (!match) continue;
+                    const timestamp = getNextISTTimestamp(timeStr);
+                    const fireTimeDate = new Date(timestamp * 1000);
 
-                    let hours = parseInt(match[1]);
-                    let minutes = match[2] ? parseInt(match[2]) : 0;
-                    let ampm = match[3] ? match[3].toUpperCase() : '';
-
-                    if (ampm === 'PM' && hours < 12) hours += 12;
-                    else if (ampm === 'AM' && hours === 12) hours = 0;
-
-                    const now = new Date();
-                    const fireTime = new Date();
-                    fireTime.setHours(hours, minutes, 0, 0);
-
-                    // If time has passed today, schedule for tomorrow
-                    if (fireTime < now) {
-                        fireTime.setDate(fireTime.getDate() + 1);
-                    }
-
-                    const timestamp = Math.floor(fireTime.getTime() / 1000);
                     const payload = JSON.stringify({
                         userId: req.user._id.toString(),
                         fcmToken: fcmToken,
@@ -260,7 +276,7 @@ export const updateUserMedicineReminders = async (req, res) => {
                     });
 
                     await zadd('reminders', timestamp, payload);
-                    console.log(`[REDIS] Added reminder for ${medicineName} at ${fireTime.toLocaleString()}`);
+                    console.log(`[REDIS] Added reminder for ${medicineName} at ${fireTimeDate.toLocaleString()} (IST target confirmed)`);
                 }
             } catch (err) {
                 console.error('Error saving to Redis:', err);
@@ -341,35 +357,21 @@ export const recordDoseByName = async (req, res) => {
                     // a) Remove today's remaining reminder
                     await zrem('reminders', remStr);
 
-                    // b) Schedule for next day based on time string (e.g. "02:03pm")
-                    const match = rem.time.match(/(\d+)(?::(\d+))?\s*([AP]M)?/i);
-                    if (match) {
-                        let hours = parseInt(match[1]);
-                        let minutes = match[2] ? parseInt(match[2]) : 0;
-                        let ampm = match[3] ? match[3].toUpperCase() : '';
+                    // Reschedule for next day based on time string
+                    const nextDayTimestamp = getNextISTTimestamp(rem.time, true);
+                    const nextDayDate = new Date(nextDayTimestamp * 1000);
 
-                        if (ampm === 'PM' && hours < 12) hours += 12;
-                        else if (ampm === 'AM' && hours === 12) hours = 0;
+                    // Strict schema as per user request (No timestamp/taken in payload)
+                    const newPayload = JSON.stringify({
+                        userId: rem.userId,
+                        fcmToken: rem.fcmToken,
+                        medicine: rem.medicine,
+                        time: rem.time,
+                        repeat: rem.repeat
+                    });
 
-                        const fireTime = new Date();
-                        fireTime.setHours(hours, minutes, 0, 0);
-                        // Always schedule for tomorrow since we are recording Today's dose
-                        fireTime.setDate(fireTime.getDate() + 1);
-
-                        const nextDayTimestamp = Math.floor(fireTime.getTime() / 1000);
-
-                        // Strict schema as per user request (No timestamp/taken in payload)
-                        const newPayload = JSON.stringify({
-                            userId: rem.userId,
-                            fcmToken: rem.fcmToken,
-                            medicine: rem.medicine,
-                            time: rem.time,
-                            repeat: rem.repeat
-                        });
-
-                        await zadd('reminders', nextDayTimestamp, newPayload);
-                        console.log(`[REDIS] Rescheduled ${actualMedName} to next day at ${rem.time}`);
-                    }
+                    await zadd('reminders', nextDayTimestamp, newPayload);
+                    console.log(`[REDIS] Rescheduled ${actualMedName} to next day at ${rem.time} (IST: ${nextDayDate.toLocaleString()})`);
                 }
             }
         } catch (redisErr) {
