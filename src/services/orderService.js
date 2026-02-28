@@ -111,6 +111,19 @@ export const confirmOrder = async (orderId, userId) => {
         }
     }
 
+    // 1.7 STRICT STOCK CHECK: Verify all items are still in stock before proceeding
+    for (const item of preOrder.items) {
+        const medicine = await Medicine.findOne({
+            name: { $regex: new RegExp(`^${item.medicineName}$`, 'i') }
+        });
+        if (!medicine) {
+            throw new Error(`Medicine "${item.medicineName}" not found in global catalog.`);
+        }
+        if (medicine.currentStock < item.quantity) {
+            throw new Error(`Insufficient stock for "${item.medicineName}". Available: ${medicine.currentStock}, Requested: ${item.quantity}`);
+        }
+    }
+
     // 2. Update Stock
     // Map PreOrder items to format expected by updateMedicineStock
     // PreOrder items have: medicineName, quantity, unit, pricePerUnit, _dailyConsumption
@@ -169,8 +182,7 @@ export const updateMedicineStock = async (userId, orderItems, orderId = null) =>
                 if (medicineDoc.currentStock >= normalizedQuantity) {
                     medicineDoc.currentStock -= normalizedQuantity;
                 } else {
-                    console.warn(`Insufficient stock during confirmation for ${medicineDoc.name}. Setting to 0.`);
-                    medicineDoc.currentStock = 0;
+                    throw new Error(`Insufficient stock during confirmation for ${medicineDoc.name}. Available: ${medicineDoc.currentStock}, Requested: ${normalizedQuantity}`);
                 }
 
                 await medicineDoc.save();
