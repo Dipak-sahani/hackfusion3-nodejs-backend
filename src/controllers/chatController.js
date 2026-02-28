@@ -17,6 +17,7 @@ if (!process.env.FASTAPI_URL) {
 }
 
 export const handleChatMessage = async (req, res) => {
+    console.log(`[CHAT] Incoming message from user: ${req.user?._id || 'unknown'}`);
     try {
         const startTime = Date.now();
         const { text } = req.body;
@@ -98,8 +99,10 @@ export const handleChatMessage = async (req, res) => {
         // Now we want a chat endpoint.
 
         // Let's call /normalize first to classify
-        const normalizeResponse = await axios.post(`${FASTAPI_URL}/normalize`, payload);
+        console.log(`[CHAT] Calling FastAPI Normalize: ${FASTAPI_URL}/normalize`);
+        const normalizeResponse = await axios.post(`${FASTAPI_URL}/normalize`, payload, { timeout: 30000 });
         const data = normalizeResponse.data;
+        console.log(`[CHAT] FastAPI Normalize Response Type: ${data.type}`);
 
         // 4. Save User Message
         await addMessage(userId, { role: "user", parts: [text] });
@@ -124,7 +127,7 @@ export const handleChatMessage = async (req, res) => {
                 const genResponse = await axios.post(`${FASTAPI_URL}/generate-response`, {
                     query: text,
                     context: medicineContext
-                });
+                }, { timeout: 30000 });
                 responseMessage = genResponse.data.message;
             }
         } else if (data.type === 'order') {
@@ -300,17 +303,24 @@ export const handleChatMessage = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Chat Controller Global Error:', {
+        console.log('[CHAT_ERROR] Global Exception Caught:');
+        console.log(JSON.stringify({
             message: error.message,
-            stack: error.stack,
+            code: error.code,
             url: error.config?.url,
-            method: error.config?.method,
             status: error.response?.status,
-            data: error.response?.data
-        });
+            data: error.response?.data,
+            stack: error.stack?.substring(0, 200)
+        }, null, 2));
+
+        let userFriendlyMessage = "I'm so sorry, dear, but my system is taking a little nap right now. 💤";
+        if (error.code === 'ECONNABORTED') {
+            userFriendlyMessage = "The system is taking a bit longer than usual to respond. Please try again in 15 seconds while I wake everything up! ☕";
+        }
+
         res.json({
             type: 'chat',
-            message: "I'm so sorry, dear, but my system is taking a little nap right now. 💤 I'm still here for you, though! Could you please try saying that again in a moment? I'll be ready and waiting!",
+            message: userFriendlyMessage,
             blocked: false
         });
     }
