@@ -28,8 +28,7 @@ const allowedOrigins = [
   "https://hackfusion-admin.netlify.app",
   "http://localhost:5173",
   "http://localhost:5174",
-  "http://localhost:3000",
-  "https://hackfusion3-fastapi-backend.onrender.com"
+  "http://localhost:3000"
 ];
 
 app.use(cors({
