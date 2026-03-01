@@ -123,4 +123,42 @@ const updateFcmToken = async (req, res) => {
     }
 };
 
-export { authUser, registerUser, updateFcmToken };
+// @desc    Update user profile (name, age, gender, city)
+// @route   PUT /api/auth/profile
+// @access  Private
+const updateProfile = async (req, res) => {
+    const { name, age, gender, city } = req.body;
+
+    try {
+        const user = await User.findById(req.user._id);
+
+        if (!user) {
+            return res.status(404).json({ message: 'User not found' });
+        }
+
+        if (name !== undefined) user.name = name;
+        if (age !== undefined) user.age = age;
+        if (gender !== undefined) user.gender = gender;
+        if (city !== undefined) user.city = city;
+
+        await user.save();
+
+        console.log(`[AUTH] Profile updated for ${user.email}:`, { name: user.name, age: user.age, gender: user.gender, city: user.city });
+
+        res.json({
+            status: 'ok',
+            _id: user._id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            age: user.age,
+            gender: user.gender,
+            city: user.city,
+        });
+    } catch (error) {
+        console.error('[AUTH] Error updating profile:', error);
+        res.status(500).json({ message: error.message });
+    }
+};
+
+export { authUser, registerUser, updateFcmToken, updateProfile };
