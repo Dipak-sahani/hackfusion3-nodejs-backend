@@ -109,7 +109,8 @@ export const confirmOrder = async (orderId, userId) => {
         });
 
         if (!hasApprovedPrescription) {
-            throw new Error('This order contains medicines that require an approved prescription. Please upload and verify your prescription first.');
+            console.warn(`[ORDER] Order ${orderId} confirmed without an approved prescription. Manual verification required before delivery.`);
+            // No longer throwing error - allowing order to proceed to 'confirmed' status
         }
     }
 

@@ -23,15 +23,10 @@ export const handleChatMessage = async (req, res) => {
         const { text } = req.body;
         const userId = req.user._id;
 
-        // 0. Profile Completeness Check (Hard Block)
+        // 0. Profile Context (Optional)
         const user = req.user;
-        if (!user.age || !user.gender || !user.city) {
-            return res.json({
-                type: 'chat',
-                message: "Before I can help you order medicines, I need to know a little more about you to ensure your safety! Please complete your profile by providing your Age, Gender, and City in your account settings.",
-                blocked: true
-            });
-        }
+        const profileStatus = (user.age && user.gender && user.city) ? "Complete" : "Incomplete";
+        console.log(`[CHAT] User ${userId} profile status: ${profileStatus}`);
 
         // 1. Fetch Chat History
         const history = await getRecentMessages(userId);
