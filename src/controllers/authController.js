@@ -6,12 +6,19 @@ import { generateToken } from '../utils/authUtils.js';
 // @route   POST /api/auth/login
 // @access  Public
 const authUser = async (req, res) => {
-    const { email, password } = req.body;
+    const { email, password, role: selectedRole } = req.body;
 
     try {
         const user = await User.findOne({ email });
 
         if (user && (await user.matchPassword(password))) {
+            // STRICT ROLE CHECK: If frontend sends a role, it MUST match the DB role
+            if (selectedRole && user.role !== selectedRole) {
+                return res.status(403).json({
+                    message: `Access Denied. Your account is registered as '${user.role}', not '${selectedRole}'. Please select the correct role and try again.`
+                });
+            }
+
             res.json({
                 status: 'ok',
                 _id: user._id,
@@ -34,7 +41,7 @@ const authUser = async (req, res) => {
 // @access  Public
 const registerUser = async (req, res) => {
     console.log(`[AUTH] Registration Request Body:`, JSON.stringify(req.body, null, 2));
-    const { name, email, password, role, specialization, mode } = req.body;
+    const { name, email, password, role, specialization, mode, age, gender, city } = req.body;
 
     const normalizedEmail = email.toLowerCase().trim();
     try {
@@ -62,6 +69,9 @@ const registerUser = async (req, res) => {
             role: userRole,
             specialization,
             mode: mode || (userRole === 'doctor' ? ["online"] : undefined),
+            age,
+            gender,
+            city,
         });
 
         if (user) {

@@ -8,6 +8,9 @@ const userSchema = new mongoose.Schema({
     role: { type: String, enum: ['admin', 'customer', 'doctor'], default: 'customer' },
     phone: { type: String },
     address: { type: String },
+    age: { type: Number },
+    gender: { type: String, enum: ['Male', 'Female', 'Other'] },
+    city: { type: String },
     dateOfBirth: { type: Date }, // Added for medical age verification
     fcmToken: { type: String }, // For push notifications
     familyMembers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'FamilyMember' }],

@@ -21,7 +21,18 @@ const app = express();
 
 // Middleware
 app.use(express.json()); // Parse JSON bodies
-app.use(morgan('dev')); // Logging
+
+// Custom Request Logger
+app.use((req, res, next) => {
+  const start = Date.now();
+  console.log(`\n[REQUEST] ${req.method} ${req.url} - Started`);
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[RESPONSE] ${req.method} ${req.url} - Status: ${res.statusCode} - ${duration}ms`);
+  });
+  next();
+});
+
 app.use(helmet()); // Security headers
 // Allow only specific origins
 const allowedOrigins = [

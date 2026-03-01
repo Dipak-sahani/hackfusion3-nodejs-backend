@@ -23,6 +23,16 @@ export const handleChatMessage = async (req, res) => {
         const { text } = req.body;
         const userId = req.user._id;
 
+        // 0. Profile Completeness Check (Hard Block)
+        const user = req.user;
+        if (!user.age || !user.gender || !user.city) {
+            return res.json({
+                type: 'chat',
+                message: "Before I can help you order medicines, I need to know a little more about you to ensure your safety! Please complete your profile by providing your Age, Gender, and City in your account settings.",
+                blocked: true
+            });
+        }
+
         // 1. Fetch Chat History
         const history = await getRecentMessages(userId);
 
@@ -77,16 +87,17 @@ export const handleChatMessage = async (req, res) => {
             medicineContext += `\n\nUSER HAS NO UPLOADED PRESCRIPTIONS.`;
         }
 
-        // 3. Call FastAPI for Normalization/Response
-        // We will send a combined payload or update FastAPI to accept context
-        // Per plan, we update FastAPI. For now, let's construct a rich prompt if FastAPI isn't ready, 
-        // BUT the plan says we updated FastAPI. 
-        // Let's assume FastAPI is updated to accept 'chat_history' and 'context'.
+        // 2c. Add Age-Based Safety Context for AI
+        let safetyContext = "";
+        if (user.age > 40) {
+            safetyContext = "\nCRITICAL SAFETY RULE: The user is over 40 years old. If they are attempting to order a 'high power' medicine or a medication known to have severe side effects for older adults, you MUST predict that it is unsafe. Do NOT output a structured order. Instead, politely refuse the order, explain the risk playfully/warnly, and suggest a safer alternative native to your chat response.";
+        }
 
+        // 3. Call FastAPI for Normalization/Response
         const payload = {
             text: text,
             chat_history: history,
-            medicine_context: medicineContext
+            medicine_context: medicineContext + safetyContext
         };
 
         // NOTE: We need to update FastAPI main.py to handle these extra fields in InputPayload
@@ -148,10 +159,15 @@ export const handleChatMessage = async (req, res) => {
                     const medNames = orders.map(o => o.medicine_name);
                     const dbMedicines = await Medicine.find({ name: { $in: medNames.map(n => new RegExp(`^${n}$`, 'i')) } });
 
-                    const itemsRequiringPrescription = orders.filter(o => {
+                    let itemsRequiringPrescription = orders.filter(o => {
                         const dbMed = dbMedicines.find(dm => dm.name.toLowerCase() === o.medicine_name.toLowerCase());
                         return dbMed ? dbMed.requiresPrescription : true; // Default to true if not in catalog
                     });
+
+                    // AGE RULE: Under 15 always requires prescription
+                    if (user.age < 15) {
+                        itemsRequiringPrescription = orders; // All items require prescription
+                    }
 
                     // 2. Check for approved prescription only if required
                     const hasPrescriptionRequiredItems = itemsRequiringPrescription.length > 0;
