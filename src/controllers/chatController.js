@@ -165,32 +165,32 @@ export const handleChatMessage = async (req, res) => {
 
             if (orders.length > 0) {
                 try {
-                    // 1. Fetch DB records for all medicines in the order
-                    const medNames = orders.map(o => o.medicine_name.trim());
-                    const dbMedicines = await Medicine.find({
-                        name: { $in: medNames.map(n => new RegExp(`^${n}$`, 'i')) }
-                    });
+                    // 1. Fetch DB records for all medicines in the order (using robust matching)
+                    const { findBestMedicineMatch } = await import('../services/medicineService.js');
 
-                    // 2. Map statuses for each item (Stock & Prescription)
-                    const medStatuses = orders.map(o => {
-                        const dbMed = dbMedicines.find(dm => dm.name.toLowerCase().trim() === o.medicine_name.toLowerCase().trim());
-                        const isAvailable = dbMed ? dbMed.currentStock >= o.quantityConverted : false;
+                    const medStatuses = await Promise.all(orders.map(async (o) => {
+                        const dbMed = await findBestMedicineMatch(o.medicine_name);
 
-                        // Prescription rule: DB flag OR age < 15
+                        // Use matched name if found, else original
+                        const displayName = dbMed ? dbMed.name : o.medicine_name;
+                        const isAvailable = dbMed ? dbMed.currentStock >= o.quantity_converted : false;
                         const needsPrescription = (user.age < 15) || (dbMed ? dbMed.requiresPrescription : false);
 
                         return {
-                            name: o.medicine_name,
+                            originalName: o.medicine_name,
+                            name: displayName,
                             available: isAvailable,
                             needsPrescription: needsPrescription,
-                            dbMed
+                            dbMed,
+                            didCorrection: dbMed && dbMed.name.toLowerCase() !== o.medicine_name.toLowerCase()
                         };
-                    });
+                    }));
 
-                    // 3. Format Status List for Chat Response
-                    const statusList = medStatuses.map(s =>
-                        `- 💊 **${s.name}**: ${s.available ? '✅ In Stock' : '❌ Out of Stock'} | ${s.needsPrescription ? '🛡️ Prescription Required' : '✅ No Prescription Needed'}`
-                    ).join('\n');
+                    // 2. Format Status List for Chat Response (Show corrected names if applicable)
+                    const statusList = medStatuses.map(s => {
+                        const correctionTag = s.didCorrection ? ` (matched as **${s.name}**)` : "";
+                        return `- 💊 **${s.originalName}**${correctionTag}: ${s.available ? '✅ In Stock' : '❌ Out of Stock'} | ${s.needsPrescription ? '🛡️ Prescription Required' : '✅ No Prescription Needed'}`;
+                    }).join('\n');
 
                     // 4. Check for valid prescription if needed
                     const itemsRequiringPrescription = medStatuses.filter(s => s.needsPrescription);

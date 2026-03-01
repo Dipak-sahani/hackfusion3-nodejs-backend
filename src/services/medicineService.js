@@ -64,3 +64,30 @@ export const normalizeMedicines = async (extractedMedicines) => {
 
     return normalizedResults;
 };
+
+/**
+ * Advanced fuzzy matching for medicine names.
+ * Tries: Exact -> Case-Insensitive -> Partial -> Word-based.
+ */
+export const findBestMedicineMatch = async (inputName) => {
+    if (!inputName) return null;
+    const cleanName = inputName.trim();
+
+    // 1. Exact Case-Insensitive Match
+    let match = await Medicine.findOne({ name: { $regex: new RegExp(`^${cleanName}$`, 'i') } });
+    if (match) return match;
+
+    // 2. Partial Match (Contains)
+    match = await Medicine.findOne({ name: { $regex: new RegExp(cleanName, 'i') } });
+    if (match) return match;
+
+    // 3. Word-based Token Match (First 2 significant words)
+    const tokens = cleanName.split(/\s+/).filter(t => t.length > 2);
+    if (tokens.length > 0) {
+        // Try matching the first word strictly
+        match = await Medicine.findOne({ name: { $regex: new RegExp(`^${tokens[0]}`, 'i') } });
+        if (match) return match;
+    }
+
+    return null;
+};
