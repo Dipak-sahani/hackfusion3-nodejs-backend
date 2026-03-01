@@ -54,7 +54,11 @@ export const normalizeMedicines = async (extractedMedicines) => {
             medicineId: matchedMed ? matchedMed._id : null,
             isMatched: !!matchedMed,
             originalName: med.name,
-            matchedName: matchedMed ? matchedMed.name : null
+            matchedName: matchedMed ? matchedMed.name : null,
+            unit: matchedMed ? matchedMed.unit : (med.unit || 'tablet'),
+            category: matchedMed ? matchedMed.category : (med.category || 'general'),
+            image: matchedMed ? matchedMed.image : null,
+            pricePerUnit: matchedMed ? (matchedMed.pricePerUnit || matchedMed.priceRec) : 0
         };
     }));
 

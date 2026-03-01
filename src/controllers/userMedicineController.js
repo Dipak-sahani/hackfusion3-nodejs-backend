@@ -8,56 +8,37 @@ import User from '../models/User.js';
 export const getUserMedicines = async (req, res) => {
     try {
         const userMedicine = await UserMedicine.findOne({ userId: req.user._id })
-            .populate('medicines.medicine', 'name description pricePerUnit image'); // Populate global details
+            .populate('medicines.medicine', 'name description pricePerUnit image unit category');
 
         if (!userMedicine) {
-            return res.json([]); // Return empty list if no record
+            return res.json([]);
         }
 
-        // Aggregate duplicates (Handling case where same medicine was added multiple times)
-        const aggregatedMedicines = {};
+        const formattedMedicines = userMedicine.medicines.map(item => {
+            // Decoupled Logic: Use snapshot fields first, fallback to populated if needed
+            // Actually, we should probably prefer populated if it exists for "live" updates, 
+            // but use snapshots if population fails (medicine deleted).
+            const medDetails = item.medicine || {}; // Populated object 
 
-        userMedicine.medicines.forEach(item => {
-            if (!item.medicine) return;
-
-            const medId = item.medicine._id.toString();
-
-            if (aggregatedMedicines[medId]) {
-                // Merge with existing
-                aggregatedMedicines[medId].stock += item.userStock;
-
-                // Merge reminder times
-                if (item.reminderTimes && item.reminderTimes.length > 0) {
-                    const existingTimes = aggregatedMedicines[medId].reminderTimes || [];
-                    aggregatedMedicines[medId].reminderTimes = Array.from(new Set([...existingTimes, ...item.reminderTimes]));
-                }
-
-                // Keep the soonest refill date if multiple
-                if (new Date(item.nextRefillDate) < new Date(aggregatedMedicines[medId].nextRefillDate)) {
-                    aggregatedMedicines[medId].nextRefillDate = item.nextRefillDate;
-                }
-                // If any entry is inactive, we could consider it inactive, 
-                // but usually there should only be one entry per medicine now.
-                aggregatedMedicines[medId].isActive = aggregatedMedicines[medId].isActive && (item.isActive !== false);
-            } else {
-                aggregatedMedicines[medId] = {
-                    id: medId,
-                    name: item.medicine.name,
-                    description: item.medicine.description,
-                    image: item.medicine.image,
-                    stock: item.userStock,
-                    unit: item.unit,
-                    dailyConsumption: item.dailyConsumption,
-                    nextRefillDate: item.nextRefillDate,
-                    reminderTimes: item.reminderTimes || [],
-                    remindersEnabled: item.remindersEnabled !== false,
-                    isActive: item.isActive !== false,
-                    lowStock: false // Recalculate later
-                };
-            }
+            return {
+                id: item._id, // Internal ID for UI
+                globalId: item.medicine ? item.medicine._id : null,
+                name: medDetails.name || item.name || "Unknown Medicine",
+                description: medDetails.description || "No description available",
+                image: medDetails.image || item.image,
+                stock: item.userStock,
+                unit: item.unit || medDetails.unit || 'tablet',
+                category: item.category || medDetails.category || 'general',
+                dailyConsumption: item.dailyConsumption,
+                nextRefillDate: item.nextRefillDate,
+                reminderTimes: item.reminderTimes || [],
+                remindersEnabled: item.remindersEnabled !== false,
+                isActive: item.isActive !== false,
+                pricePerUnit: item.pricePerUnit || medDetails.pricePerUnit || 0
+            };
         });
 
-        const formattedMedicines = Object.values(aggregatedMedicines).map(item => {
+        const refinedList = formattedMedicines.map(item => {
             const currentDate = new Date();
 
             const nextRefillDate = item.nextRefillDate;
@@ -311,16 +292,16 @@ export const recordDoseByName = async (req, res) => {
     }
 
     try {
-        const userMedicine = await UserMedicine.findOne({ userId: req.user._id })
-            .populate('medicines.medicine', 'name');
+        const userMedicine = await UserMedicine.findOne({ userId: req.user._id });
 
         if (!userMedicine) {
             return res.status(404).json({ message: 'User inventory not found' });
         }
 
-        // Find medicine by name (case-insensitive)
+        // Find medicine by static name or populated name (case-insensitive)
         const medIndex = userMedicine.medicines.findIndex(m =>
-            m.medicine && m.medicine.name.toLowerCase() === medicineName.toLowerCase()
+            (m.name && m.name.toLowerCase() === medicineName.toLowerCase()) ||
+            (m.medicine && m.medicine.name && m.medicine.name.toLowerCase() === medicineName.toLowerCase())
         );
 
         if (medIndex === -1) {
@@ -328,7 +309,7 @@ export const recordDoseByName = async (req, res) => {
         }
 
         const currentMed = userMedicine.medicines[medIndex];
-        const actualMedName = currentMed.medicine.name;
+        const actualMedName = currentMed.name || (currentMed.medicine && currentMed.medicine.name) || "Medicine";
 
         // 1. DEDUCT STOCK
         const consumption = currentMed.dailyConsumption || 1;

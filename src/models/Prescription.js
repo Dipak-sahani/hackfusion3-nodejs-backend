@@ -25,9 +25,17 @@ const prescriptionSchema = new mongoose.Schema({
         medicines: [{
             medicine: {
                 type: mongoose.Schema.Types.ObjectId,
-                ref: 'Medicine'
+                ref: 'Medicine',
+                required: false
             },
-            name: String,
+            // Metadata Snapshots
+            name: String, // Medical Name from Prescription
+            matchedName: String, // Global Name if matched
+            unit: String,
+            image: String,
+            pricePerUnit: Number,
+
+            // Medical Data
             dosage: String,
             frequency: String,
             quantity: Number

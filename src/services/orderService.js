@@ -43,6 +43,8 @@ export const createDraftOrder = async (userId, orderItems) => {
             rawQuantity: item.quantity,
             rawUnit: unit,
             pricePerUnit: price,
+            category: existingMedicine?.category || 'general',
+            image: existingMedicine?.image,
             dailyConsumption: item.dailyConsumption,
             reminderTimes: item.reminderTimes
         });
@@ -151,13 +153,8 @@ export const updateMedicineStock = async (userId, orderItems, orderId = null) =>
         if (!userMedicine) {
             userMedicine = new UserMedicine({ userId, medicines: [] });
         } else {
-            // FIX: Filter out legacy records that don't match new schema (missing 'medicine' field)
-            // This auto-migrates/cleans the document to prevent validation errors on save
-            const validMedicines = userMedicine.medicines.filter(m => m.medicine);
-            if (validMedicines.length !== userMedicine.medicines.length) {
-                console.log(`Removed ${userMedicine.medicines.length - validMedicines.length} invalid legacy medicine entries for user ${userId}`);
-                userMedicine.medicines = validMedicines;
-            }
+            // Decoupled: We no longer filter out records missing 'medicine' ref.
+            // These are valid snapshots.
         }
 
         for (const item of orderItems) {
@@ -198,58 +195,68 @@ export const updateMedicineStock = async (userId, orderItems, orderId = null) =>
 
             } else {
                 // If by any chance it's missing (e.g. deleted from catalog between draft and confirm)
-                throw new Error(`Medicine "${item.medicineName}" no longer exists in catalog.`);
+                // We still let the user update their personal inventory if they have the data
+                // throw new Error(`Medicine "${item.medicineName}" no longer exists in catalog.`);
             }
 
             // 2. Update User Personal Inventory (UserMedicine)
-            // Normalize quantity based on medicineDoc.tabletsPerStrip
-            const tabletsPerStrip = medicineDoc.tabletsPerStrip || 10;
+            // Use medicineDoc if found, otherwise use fallback from item/order
+            const tabletsPerStrip = medicineDoc?.tabletsPerStrip || 10;
             const normalizedQuantity = normalizeToTablet(item.quantity, item.unit, tabletsPerStrip);
 
             // Check if user already tracks this medicine to prevent duplicates
             const userMedIndex = userMedicine.medicines.findIndex(m =>
-                m.medicine && m.medicine.toString() === medicineDoc._id.toString()
+                (medicineDoc && m.medicine && m.medicine.toString() === medicineDoc._id.toString()) ||
+                (m.name && m.name.toLowerCase() === item.medicineName.toLowerCase())
             );
 
             if (userMedIndex > -1) {
                 // MEDICINE EXISTS: Increment the existing quantity (totalTablets)
-                console.log(`Incrementing stock (tablets) for ${medicineDoc.name} in user ${userId}'s inventory.`);
+                const existing = userMedicine.medicines[userMedIndex];
+                console.log(`Incrementing stock for ${existing.name || item.medicineName} in user ${userId}'s inventory.`);
 
-                // Keep both for transition if needed, but primary is totalTablets now
-                userMedicine.medicines[userMedIndex].totalTablets += normalizedQuantity;
-                userMedicine.medicines[userMedIndex].userStock = userMedicine.medicines[userMedIndex].totalTablets;
-                userMedicine.medicines[userMedIndex].initialTablets = userMedicine.medicines[userMedIndex].totalTablets;
+                existing.totalTablets += normalizedQuantity;
+                existing.userStock = existing.totalTablets;
+                existing.initialTablets = existing.totalTablets;
 
-                // Update consumption and reminders if provided
+                // Update Snapshots in case global data updated
+                if (medicineDoc) {
+                    existing.medicine = medicineDoc._id;
+                    existing.name = medicineDoc.name;
+                    existing.unit = medicineDoc.unit || 'tablet';
+                    existing.category = medicineDoc.category;
+                    existing.pricePerUnit = medicineDoc.pricePerUnit || medicineDoc.priceRec;
+                    existing.image = medicineDoc.image;
+                }
+
                 if (item.dailyConsumption) {
-                    userMedicine.medicines[userMedIndex].dailyConsumption = item.dailyConsumption;
+                    existing.dailyConsumption = item.dailyConsumption;
                 }
                 if (item.reminderTimes && item.reminderTimes.length > 0) {
-                    userMedicine.medicines[userMedIndex].reminderTimes = item.reminderTimes;
+                    existing.reminderTimes = item.reminderTimes;
                 }
 
-                // Recalculate Refill Date
-                const currentEntry = userMedicine.medicines[userMedIndex];
-                const refillDate = calculateRefillDate(
-                    currentEntry.totalTablets,
-                    currentEntry.dailyConsumption
-                );
-                userMedicine.medicines[userMedIndex].nextRefillDate = refillDate;
+                const refillDate = calculateRefillDate(existing.totalTablets, existing.dailyConsumption);
+                existing.nextRefillDate = refillDate;
 
             } else {
                 // MEDICINE DOES NOT EXIST: Create a new record in the array
-                console.log(`Adding new medicine ${medicineDoc.name} to user ${userId}'s inventory.`);
+                console.log(`Adding new medicine ${item.medicineName} to user ${userId}'s inventory.`);
                 const consumption = item.dailyConsumption || 1;
                 const refillDate = calculateRefillDate(normalizedQuantity, consumption);
 
                 userMedicine.medicines.push({
-                    medicine: medicineDoc._id,
+                    medicine: medicineDoc ? medicineDoc._id : null,
+                    name: medicineDoc ? medicineDoc.name : item.medicineName,
+                    unit: medicineDoc ? medicineDoc.unit : (item.unit || 'tablet'),
+                    category: medicineDoc ? medicineDoc.category : 'general',
+                    pricePerUnit: medicineDoc ? (medicineDoc.pricePerUnit || medicineDoc.priceRec) : 0,
+                    image: medicineDoc ? medicineDoc.image : null,
                     totalTablets: normalizedQuantity,
-                    userStock: normalizedQuantity, // Match totalTablets for UI compatibility
+                    userStock: normalizedQuantity,
                     initialTablets: normalizedQuantity,
-                    dailyConsumption: item.dailyConsumption || 1,
+                    dailyConsumption: consumption,
                     reminderTimes: item.reminderTimes || [],
-                    unit: 'tablet', // Base unit is always tablet now
                     isActive: true,
                     startedAt: new Date(),
                     nextRefillDate: refillDate

@@ -11,8 +11,14 @@ const UserMedicineSchema = new mongoose.Schema({
         medicine: {
             type: mongoose.Schema.Types.ObjectId, // Link to Global Medicine Catalog
             ref: 'Medicine',
-            required: true
+            required: false // Decoupled: can persist even if global medicine is deleted
         },
+        // Static Snapshots (Persistence)
+        name: String,
+        unit: { type: String, default: 'tablet' },
+        category: String,
+        pricePerUnit: { type: Number, default: 0 },
+        image: String,
         userStock: {
             type: Number, // User's personal stock
             default: 0

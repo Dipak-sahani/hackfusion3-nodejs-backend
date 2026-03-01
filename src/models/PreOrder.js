@@ -8,6 +8,8 @@ const preOrderSchema = new mongoose.Schema({
         quantity: { type: Number, required: true },
         unit: { type: String },
         pricePerUnit: { type: Number },
+        category: { type: String },
+        image: { type: String },
         dailyConsumption: { type: Number },
         reminderTimes: [{ type: String }]
     }],

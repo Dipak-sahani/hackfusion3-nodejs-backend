@@ -42,22 +42,24 @@ export const handleChatMessage = async (req, res) => {
         let medicineContext = "User has no recorded medicine history.";
         if (userMedicine && userMedicine.medicines.length > 0) {
             medicineContext = userMedicine.medicines.map(item => {
-                const med = item.medicine;
-                if (!med) return ''; // Handle case where medicine might be null (deleted)
-                // Use userStock for personal context, and global info from med
+                const med = item.medicine || {}; // Fallback if ref is missing
+                const name = med.name || item.name || "Unknown Medicine";
+                const unit = item.unit || med.unit || "tablet";
+                const category = item.category || med.category || "general";
+                const lastOrderedAt = med.lastOrderedAt || item.createdAt;
+
                 const nextRefillDate = item.nextRefillDate;
                 const currentStock = item.userStock;
                 const lowStockThreshold = med.lowStockThreshold || 50;
-                let status = item.isActive ? 'Active' : 'Paused';
 
-                // Mirror the status logic for AI context
+                let status = item.isActive ? 'Active' : 'Paused';
                 if (nextRefillDate && new Date(nextRefillDate) < new Date() && currentStock <= 0) {
                     status = "EXPIRED";
                 } else if (currentStock <= lowStockThreshold && (!nextRefillDate || new Date(nextRefillDate) >= new Date())) {
                     status = "LOW_STOCK";
                 }
 
-                return `- ${med.name}: Stock ${currentStock} ${item.unit || med.unit}, Status: ${status}, Next Refill: ${status === 'EXPIRED' ? 'None (Expired)' : item.nextRefillDate ? new Date(item.nextRefillDate).toDateString() : 'Unknown'}, Last Ordered ${med.lastOrderedAt ? new Date(med.lastOrderedAt).toDateString() : 'N/A'}`;
+                return `- ${name}: Stock ${currentStock} ${unit}, Status: ${status}, Category: ${category}, Next Refill: ${status === 'EXPIRED' ? 'None (Expired)' : nextRefillDate ? new Date(nextRefillDate).toDateString() : 'Unknown'}, Last Ordered ${lastOrderedAt ? new Date(lastOrderedAt).toDateString() : 'N/A'}`;
             }).filter(s => s !== '').join('\n');
         }
 
