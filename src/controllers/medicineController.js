@@ -380,6 +380,8 @@ const uploadMedicines = async (req, res) => {
             if (k.includes('package') || k.includes('package size') || k === 'packagesize') return 'packageSize';
             if (k.includes('description') || k === 'descriptions') return 'description';
             if (k.includes('prescription') || k.includes('required')) return 'requiresPrescription';
+            if (k === 'stock' || k === 'quantity' || k === 'qty' || k.includes('current stock') || k === 'currentstock') return 'currentStock';
+            if (k === 'unit' || k === 'units') return 'unit';
             return null;
         };
 
@@ -392,6 +394,8 @@ const uploadMedicines = async (req, res) => {
                         const price = parseFloat(value) || 0;
                         mapped.priceRec = price;
                         mapped.pricePerUnit = price; // Sync priceRec to pricePerUnit by default
+                    } else if (field === 'currentStock') {
+                        mapped.currentStock = parseInt(value, 10) || 0;
                     } else if (field === 'requiresPrescription') {
                         mapped.requiresPrescription = String(value).toLowerCase().includes('yes');
                     } else {
