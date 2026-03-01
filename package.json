@@ -23,6 +23,7 @@
     "helmet": "^7.1.0",
     "ioredis": "^5.9.3",
     "jsonwebtoken": "^9.0.3",
+    "mailgun.js": "^12.7.0",
     "mongoose": "^9.2.1",
     "morgan": "^1.10.0",
     "multer": "^2.0.2",
