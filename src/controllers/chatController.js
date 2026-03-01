@@ -158,69 +158,81 @@ export const handleChatMessage = async (req, res) => {
 
             if (orders.length > 0) {
                 try {
-                    // 1. Check which medicines in the order require a prescription
+                    // 1. Fetch DB records for all medicines in the order
                     const medNames = orders.map(o => o.medicine_name.trim());
                     const dbMedicines = await Medicine.find({
                         name: { $in: medNames.map(n => new RegExp(`^${n}$`, 'i')) }
                     });
 
-                    let itemsRequiringPrescription = orders.filter(o => {
+                    // 2. Map statuses for each item (Stock & Prescription)
+                    const medStatuses = orders.map(o => {
                         const dbMed = dbMedicines.find(dm => dm.name.toLowerCase().trim() === o.medicine_name.toLowerCase().trim());
-                        // FIX: Only require prescription if explicitly marked in DB. 
-                        // If not in catalog, we warn but don't hard block unless AI flagged it (coming later)
-                        return dbMed ? dbMed.requiresPrescription : false;
+                        const isAvailable = dbMed ? dbMed.currentStock >= o.quantityConverted : false;
+
+                        // Prescription rule: DB flag OR age < 15
+                        const needsPrescription = (user.age < 15) || (dbMed ? dbMed.requiresPrescription : false);
+
+                        return {
+                            name: o.medicine_name,
+                            available: isAvailable,
+                            needsPrescription: needsPrescription,
+                            dbMed
+                        };
                     });
 
-                    // AGE RULE: Under 15 always requires prescription
-                    if (user.age < 15) {
-                        itemsRequiringPrescription = orders; // All items require prescription
-                    }
+                    // 3. Format Status List for Chat Response
+                    const statusList = medStatuses.map(s =>
+                        `- 💊 **${s.name}**: ${s.available ? '✅ In Stock' : '❌ Out of Stock'} | ${s.needsPrescription ? '🛡️ Prescription Required' : '✅ No Prescription Needed'}`
+                    ).join('\n');
 
-                    // 2. Check for approved prescription only if required
+                    // 4. Check for valid prescription if needed
+                    const itemsRequiringPrescription = medStatuses.filter(s => s.needsPrescription);
                     const hasPrescriptionRequiredItems = itemsRequiringPrescription.length > 0;
                     let hasValidPrescription = false;
 
                     if (hasPrescriptionRequiredItems) {
-                        // Trust prescriptions that are AI_APPROVED OR were uploaded in the last 24 hours (Freshness Rule)
                         const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
                         const validPrescription = await Prescription.findOne({
                             userId,
                             $or: [
                                 { aiVerificationStatus: 'AI_APPROVED' },
                                 {
                                     createdAt: { $gte: oneDayAgo },
-                                    aiVerificationStatus: { $ne: 'AI_REJECTED' } // Don't use if explicitly rejected
+                                    aiVerificationStatus: { $ne: 'AI_REJECTED' }
                                 }
                             ]
                         });
                         hasValidPrescription = !!validPrescription;
                     }
 
-                    if (hasPrescriptionRequiredItems && !hasValidPrescription) {
-                        const requiredNames = itemsRequiringPrescription.map(i => i.medicine_name).join(', ');
-                        responseMessage = `I've identified your order, dear, but I see that ${requiredNames} require a valid prescription. 🛡️\n\nTo keep you safe, please upload a photo or PDF of your prescription so we can process this for you!`;
+                    // 5. Logic Decisions
+                    const allAvailable = medStatuses.every(s => s.available);
+
+                    if (!allAvailable) {
+                        const outOfStockNames = medStatuses.filter(s => !s.available).map(s => s.name).join(', ');
+                        responseMessage = `I've checked the inventory, dear! Here is the status:\n\n${statusList}\n\nI'm sorry, but ${outOfStockNames} are currently out of stock or have insufficient quantity. I've alerted the manager to restock them! Is there anything else you'd like?`;
+                        data.type = "blocked_order";
+                    } else if (hasPrescriptionRequiredItems && !hasValidPrescription) {
+                        const requiredNames = itemsRequiringPrescription.map(i => i.name).join(', ');
+                        responseMessage = `I've checked your request! Here is the status:\n\n${statusList}\n\nSince ${requiredNames} require a prescription, could you please upload a photo or PDF of it? I'll be waiting! 🛡️`;
                         data.needs_prescription = true;
                         data.type = "blocked_order";
                     } else {
-                        // Map FastAPI snake_case to JS camelCase
+                        // Everything good!
                         const orderItems = orders.map(o => ({
                             medicineName: o.medicine_name,
                             quantity: o.quantity,
                             unit: o.unit || 'tablet',
-                            quantityConverted: o.quantity_converted, // Map FastAPI snake_case to camelCase
-                            dailyConsumption: o.daily_consumption || 1, // Default to 1
-                            reminderTimes: o.reminder_times || [] // Extract if AI provided it
+                            quantityConverted: o.quantity_converted,
+                            dailyConsumption: o.daily_consumption || 1,
+                            reminderTimes: o.reminder_times || []
                         }));
 
-                        // Create Draft
                         const draftOrder = await createDraftOrder(userId, orderItems);
-
-                        // Format response for Confirmation
                         const itemDetails = draftOrder.items.map(i => `${i.quantity} ${i.unit} ${i.medicineName} (₹${i.pricePerUnit}/unit)`).join(', ');
-                        responseMessage = `I've prepared a draft order for: ${itemDetails}. Total estimated cost: ₹${draftOrder.totalAmount}. Do you want to confirm this order?${reminderNote}`;
 
-                        // Attach the PreOrder object and set it as the current session_id for confirmation
+                        responseMessage = `Great news! Everything is ready:\n\n${statusList}\n\nI've prepared a draft for: ${itemDetails}. Total: ₹${draftOrder.totalAmount}. Shall I confirm this for you, dear?${reminderNote}`;
+
                         data.draftOrder = draftOrder;
                         data.session_id = draftOrder._id;
                         data.order_id = draftOrder._id;
