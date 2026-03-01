@@ -26,7 +26,8 @@ export const normalizeMedicines = async (extractedMedicines) => {
                     { name: { $regex: new RegExp(`^${med.name}$`, 'i') } },
                     {
                         $inc: { requestedCount: 1 },
-                        $set: { lastRequestedAt: new Date() }
+                        $set: { lastRequestedAt: new Date() },
+                        $setOnInsert: { name: med.name }
                     },
                     { upsert: true, new: true }
                 );
