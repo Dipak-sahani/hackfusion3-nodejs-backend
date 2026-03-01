@@ -61,11 +61,11 @@ export const handleChatMessage = async (req, res) => {
             medicineContext += "None recorded yet.\n";
         }
 
-        // 2b. Add GLOBAL PHARMACY CATALOG (Top 50 Available Items)
-        const globalMedicines = await Medicine.find({ stock: { $gt: 0 } }).limit(50).select('name category unit pricePerUnit prescriptionRequired');
+        // 2b. Add GLOBAL PHARMACY CATALOG (All Available Items)
+        const globalMedicines = await Medicine.find({ stock: { $gt: 0 } }).select('name category unit pricePerUnit prescriptionRequired');
         if (globalMedicines.length > 0) {
             medicineContext += "\n\nAVAILABLE GLOBAL PHARMACY CATALOG:\n";
-            medicineContext += globalMedicines.map(m => `- ${m.name}: Category: ${m.category}, Price: ₹${m.pricePerUnit}/${m.unit}, Prescription Required: ${m.prescriptionRequired ? 'YES' : 'NO'}`).join('\n');
+            medicineContext += globalMedicines.map(m => `- ${m.name} (${m.category}): ₹${m.pricePerUnit}/${m.unit}${m.prescriptionRequired ? ' [RX]' : ''}`).join('\n');
         }
 
         // 2b. Add Latest Prescription Context (including pending/manual review)
