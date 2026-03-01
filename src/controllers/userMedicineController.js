@@ -217,7 +217,7 @@ const getNextISTTimestamp = (timeStr, forceTomorrow = false) => {
 // @route   PUT /api/user/medicines/:id/reminders
 // @access  Private
 export const updateUserMedicineReminders = async (req, res) => {
-    const { reminderTimes, remindersEnabled, dailyConsumption } = req.body;
+    const { reminderTimes, remindersEnabled, dailyConsumption, repeat: repeatInterval } = req.body;
     const medicineId = req.params.id;
 
     try {
@@ -272,7 +272,7 @@ export const updateUserMedicineReminders = async (req, res) => {
                         fcmToken: fcmToken,
                         medicine: medicineName,
                         time: timeStr,
-                        repeat: Number(dailyConsumption || currentMed.dailyConsumption || 1)
+                        repeat: Number(repeatInterval || currentMed.repeatInterval || 20)
                     });
 
                     await zadd('reminders', timestamp, payload);

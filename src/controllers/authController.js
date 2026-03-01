@@ -127,7 +127,7 @@ const updateFcmToken = async (req, res) => {
 // @route   PUT /api/auth/profile
 // @access  Private
 const updateProfile = async (req, res) => {
-    const { name, age, gender, city } = req.body;
+    const { name, age, gender, city, email } = req.body;
 
     try {
         const user = await User.findById(req.user._id);
@@ -140,6 +140,15 @@ const updateProfile = async (req, res) => {
         if (age !== undefined) user.age = age;
         if (gender !== undefined) user.gender = gender;
         if (city !== undefined) user.city = city;
+        if (email !== undefined) {
+            const normalizedEmail = email.toLowerCase().trim();
+            // Check if email is already taken by another user
+            const existing = await User.findOne({ email: normalizedEmail, _id: { $ne: user._id } });
+            if (existing) {
+                return res.status(400).json({ message: 'This email is already registered to another account.' });
+            }
+            user.email = normalizedEmail;
+        }
 
         await user.save();
 
