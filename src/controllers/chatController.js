@@ -31,12 +31,13 @@ export const handleChatMessage = async (req, res) => {
         // 1. Fetch Chat History
         const history = await getRecentMessages(userId);
 
-        // 2. Fetch User Medicine Context
+        // 2. Fetch Context Data
         const userMedicine = await UserMedicine.findOne({ userId }).populate('medicines.medicine');
+        let medicineContext = "";
 
-        let medicineContext = "User has no recorded medicine history.";
+        // 2a. Fetch User's Personal Inventory
         if (userMedicine && userMedicine.medicines.length > 0) {
-            medicineContext = userMedicine.medicines.map(item => {
+            medicineContext += userMedicine.medicines.map(item => {
                 const med = item.medicine || {}; // Fallback if ref is missing
                 const name = med.name || item.name || "Unknown Medicine";
                 const unit = item.unit || med.unit || "tablet";
@@ -56,6 +57,15 @@ export const handleChatMessage = async (req, res) => {
 
                 return `- ${name}: Stock ${currentStock} ${unit}, Status: ${status}, Category: ${category}, Next Refill: ${status === 'EXPIRED' ? 'None (Expired)' : nextRefillDate ? new Date(nextRefillDate).toDateString() : 'Unknown'}, Last Ordered ${lastOrderedAt ? new Date(lastOrderedAt).toDateString() : 'N/A'}`;
             }).filter(s => s !== '').join('\n');
+        } else {
+            medicineContext += "None recorded yet.\n";
+        }
+
+        // 2b. Add GLOBAL PHARMACY CATALOG (Top 50 Available Items)
+        const globalMedicines = await Medicine.find({ stock: { $gt: 0 } }).limit(50).select('name category unit pricePerUnit prescriptionRequired');
+        if (globalMedicines.length > 0) {
+            medicineContext += "\n\nAVAILABLE GLOBAL PHARMACY CATALOG:\n";
+            medicineContext += globalMedicines.map(m => `- ${m.name}: Category: ${m.category}, Price: ₹${m.pricePerUnit}/${m.unit}, Prescription Required: ${m.prescriptionRequired ? 'YES' : 'NO'}`).join('\n');
         }
 
         // 2b. Add Latest Prescription Context (including pending/manual review)
