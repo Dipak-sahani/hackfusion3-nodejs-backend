@@ -76,6 +76,7 @@ export const findBestMedicineMatch = async (inputName) => {
     // 1. Exact Case-Insensitive Match
     let match = await Medicine.findOne({ name: { $regex: new RegExp(`^${cleanName}$`, 'i') } });
     if (match) return match;
+    console.log("matched", match);
 
     // 2. Partial Match (Contains)
     match = await Medicine.findOne({ name: { $regex: new RegExp(cleanName, 'i') } });
