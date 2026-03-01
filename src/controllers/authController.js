@@ -60,6 +60,14 @@ const registerUser = async (req, res) => {
             ? role.toLowerCase().trim()
             : 'customer';
 
+        // Only one admin allowed in the system
+        if (userRole === 'admin') {
+            const existingAdmin = await User.findOne({ role: 'admin' });
+            if (existingAdmin) {
+                return res.status(400).json({ message: 'An admin is already registered. Only one admin account is allowed.' });
+            }
+        }
+
         console.log(`[AUTH] Final Role assigned to model: "${userRole}"`);
 
         const user = await User.create({
