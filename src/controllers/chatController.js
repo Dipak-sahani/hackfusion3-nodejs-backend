@@ -212,13 +212,8 @@ export const handleChatMessage = async (req, res) => {
                         const outOfStockNames = medStatuses.filter(s => !s.available).map(s => s.name).join(', ');
                         responseMessage = `I've checked the inventory, dear! Here is the status:\n\n${statusList}\n\nI'm sorry, but ${outOfStockNames} are currently out of stock or have insufficient quantity. I've alerted the manager to restock them! Is there anything else you'd like?`;
                         data.type = "blocked_order";
-                    } else if (hasPrescriptionRequiredItems && !hasValidPrescription) {
-                        const requiredNames = itemsRequiringPrescription.map(i => i.name).join(', ');
-                        responseMessage = `I've checked your request! Here is the status:\n\n${statusList}\n\nSince ${requiredNames} require a prescription, could you please upload a photo or PDF of it? I'll be waiting! 🛡️`;
-                        data.needs_prescription = true;
-                        data.type = "blocked_order";
                     } else {
-                        // Everything good!
+                        // Proceed to draft even if prescription is missing (Soft Warning instead of Block)
                         const orderItems = orders.map(o => ({
                             medicineName: o.medicine_name,
                             quantity: o.quantity,
@@ -231,8 +226,16 @@ export const handleChatMessage = async (req, res) => {
                         const draftOrder = await createDraftOrder(userId, orderItems);
                         const itemDetails = draftOrder.items.map(i => `${i.quantity} ${i.unit} ${i.medicineName} (₹${i.pricePerUnit}/unit)`).join(', ');
 
-                        responseMessage = `Great news! Everything is ready:\n\n${statusList}\n\nI've prepared a draft for: ${itemDetails}. Total: ₹${draftOrder.totalAmount}. Shall I confirm this for you, dear?${reminderNote}`;
+                        let prescriptionNote = "";
+                        if (hasPrescriptionRequiredItems && !hasValidPrescription) {
+                            const requiredNames = itemsRequiringPrescription.map(i => i.name).join(', ');
+                            prescriptionNote = `\n\n⚠️ **Note**: ${requiredNames} require a prescription. You can upload it now or after confirming, but we'll need it before delivery! 🛡️`;
+                            data.needs_prescription = true;
+                        }
 
+                        responseMessage = `Good news! I've prepared your draft:\n\n${statusList}\n${prescriptionNote}\n\nOrder summary: ${itemDetails}. Total: ₹${draftOrder.totalAmount}. Shall I confirm this for you, dear?${reminderNote}`;
+
+                        data.type = "order"; // Ensure type is order so frontend shows confirmation
                         data.draftOrder = draftOrder;
                         data.session_id = draftOrder._id;
                         data.order_id = draftOrder._id;
