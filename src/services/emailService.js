@@ -1,5 +1,6 @@
 import Mailgun from 'mailgun.js';
 import formData from 'form-data';
+import User from '../models/User.js';
 
 const mailgun = new Mailgun(formData);
 
@@ -21,6 +22,14 @@ const getClient = () => {
 };
 
 /**
+ * Dynamically fetches the admin email from the database.
+ */
+const getAdminEmail = async () => {
+    const admin = await User.findOne({ role: 'admin' }).select('email');
+    return admin?.email || null;
+};
+
+/**
  * Sends an email to the administrator via Mailgun.
  * @param {string} subject - Email subject
  * @param {string} text - Email body (plain text)
@@ -29,11 +38,15 @@ const getClient = () => {
 export const sendAdminEmail = async (subject, text, html = '') => {
     try {
         const domain = process.env.MAILGUN_DOMAIN;
-        const adminEmail = process.env.ADMIN_EMAIL;
+        const adminEmail = await getAdminEmail();
         const fromEmail = process.env.MAILGUN_FROM || `MedFlow Alert <noreply@${domain}>`;
 
-        if (!domain || !adminEmail) {
-            console.warn('[EMAIL] Skipping email: MAILGUN_DOMAIN or ADMIN_EMAIL is not configured in .env.');
+        if (!domain) {
+            console.warn('[EMAIL] Skipping email: MAILGUN_DOMAIN is not configured in .env.');
+            return;
+        }
+        if (!adminEmail) {
+            console.warn('[EMAIL] Skipping email: No admin user found in the database.');
             return;
         }
 
@@ -48,7 +61,7 @@ export const sendAdminEmail = async (subject, text, html = '') => {
             html: html || text,
         });
 
-        console.log(`[EMAIL] Mailgun alert sent to Admin: ${msg.id}`);
+        console.log(`[EMAIL] Mailgun alert sent to Admin (${adminEmail}): ${msg.id}`);
     } catch (error) {
         console.error('[EMAIL] Mailgun error:', error.message || error);
     }
