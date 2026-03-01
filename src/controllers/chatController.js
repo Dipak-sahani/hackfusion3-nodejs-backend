@@ -6,7 +6,7 @@ import ChatSession from '../models/ChatSession.js';
 import LLMExtractionLog from '../models/LLMExtractionLog.js'; // Import Log model
 import PreOrder from '../models/PreOrder.js';
 import Prescription from '../models/Prescription.js';
-import { createDraftOrder } from '../services/orderService.js'; // Use draft creation
+import { createDraftOrder, confirmOrder } from '../services/orderService.js'; // Use draft creation and confirmation
 import { notifyAdmins } from '../services/adminNotificationService.js';
 
 const FASTAPI_URL = process.env.FASTAPI_URL || 'http://localhost:8000';
@@ -62,10 +62,10 @@ export const handleChatMessage = async (req, res) => {
         }
 
         // 2b. Add GLOBAL PHARMACY CATALOG (All Available Items)
-        const globalMedicines = await Medicine.find({ stock: { $gt: 0 } }).select('name category unit pricePerUnit prescriptionRequired');
+        const globalMedicines = await Medicine.find({ currentStock: { $gt: 0 } }).select('name category unit pricePerUnit requiresPrescription');
         if (globalMedicines.length > 0) {
             medicineContext += "\n\nAVAILABLE GLOBAL PHARMACY CATALOG:\n";
-            medicineContext += globalMedicines.map(m => `- ${m.name} (${m.category}): ₹${m.pricePerUnit}/${m.unit}${m.prescriptionRequired ? ' [RX]' : ''}`).join('\n');
+            medicineContext += globalMedicines.map(m => `- ${m.name} (${m.category}): ₹${m.pricePerUnit}/${m.unit}${m.requiresPrescription ? ' [RX]' : ''}`).join('\n');
         }
 
         // 2b. Add Latest Prescription Context (including pending/manual review)
@@ -94,20 +94,14 @@ export const handleChatMessage = async (req, res) => {
             medicineContext += `\n\nUSER HAS NO UPLOADED PRESCRIPTIONS.`;
         }
 
-        // 2c. Add User Bio Context (to prevent AI from asking for Age/Gender)
-        const bioContext = `\nUSER BIO DATA:\n- Age: ${user.age}\n- Gender: ${user.gender}\n- City: ${user.city}\n(Do NOT ask the user for these details unless they are missing above.)`;
-
-        // 2d. Add Age-Based Safety Context for AI
-        let safetyContext = "";
-        if (user.age > 40) {
-            safetyContext = "\nCRITICAL SAFETY RULE: The user is over 40 years old. If they are attempting to order a 'high power' medicine or a medication known to have severe side effects for older adults, you MUST predict that it is unsafe. Do NOT output a structured order. Instead, politely refuse the order, explain the risk playfully/warnly, and suggest a safer alternative native to your chat response.";
-        }
+        // 2c. Add User Bio Context (to prevent AI from asking for City)
+        const bioContext = `\nUSER BIO DATA:\n- City: ${user.city}\n(Do NOT ask the user for this detail if it's already here.)`;
 
         // 3. Call FastAPI for Normalization/Response
         const payload = {
             text: text,
             chat_history: history,
-            medicine_context: medicineContext + bioContext + safetyContext
+            medicine_context: medicineContext + bioContext
         };
 
         // NOTE: We need to update FastAPI main.py to handle these extra fields in InputPayload
@@ -174,7 +168,7 @@ export const handleChatMessage = async (req, res) => {
                         // Use matched name if found, else original
                         const displayName = dbMed ? dbMed.name : o.medicine_name;
                         const isAvailable = dbMed ? dbMed.currentStock >= o.quantity_converted : false;
-                        const needsPrescription = (user.age < 15) || (dbMed ? dbMed.requiresPrescription : false);
+                        const needsPrescription = dbMed ? dbMed.requiresPrescription : false;
 
                         return {
                             originalName: o.medicine_name,
@@ -186,33 +180,15 @@ export const handleChatMessage = async (req, res) => {
                         };
                     }));
 
-                    // 2. Format Status List for Chat Response (Show corrected names if applicable)
-                    const statusList = medStatuses.map(s => {
+                    // 2. Format Status List for Chat Response (Show corrected names and converted quantities)
+                    const statusList = medStatuses.map((s, index) => {
+                        const o = orders[index];
+                        const quantityDisplay = o.quantity_converted ? `**${o.quantity_converted} tablets**` : `**${o.quantity} ${o.unit || 'units'}**`;
                         const correctionTag = s.didCorrection ? ` (matched as **${s.name}**)` : "";
-                        return `- 💊 **${s.originalName}**${correctionTag}: ${s.available ? '✅ In Stock' : '❌ Out of Stock'} | ${s.needsPrescription ? '🛡️ Prescription Required' : '✅ No Prescription Needed'}`;
+
+                        return `- 💊 ${quantityDisplay} of **${s.originalName}**${correctionTag}: ${s.available ? '✅ In Stock' : '❌ Out of Stock'}`;
                     }).join('\n');
 
-                    // 4. Check for valid prescription if needed
-                    const itemsRequiringPrescription = medStatuses.filter(s => s.needsPrescription);
-                    const hasPrescriptionRequiredItems = itemsRequiringPrescription.length > 0;
-                    let hasValidPrescription = false;
-
-                    if (hasPrescriptionRequiredItems) {
-                        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-                        const validPrescription = await Prescription.findOne({
-                            userId,
-                            $or: [
-                                { aiVerificationStatus: 'AI_APPROVED' },
-                                {
-                                    createdAt: { $gte: oneDayAgo },
-                                    aiVerificationStatus: { $ne: 'AI_REJECTED' }
-                                }
-                            ]
-                        });
-                        hasValidPrescription = !!validPrescription;
-                    }
-
-                    // 5. Logic Decisions
                     const allAvailable = medStatuses.every(s => s.available);
 
                     if (!allAvailable) {
@@ -220,32 +196,42 @@ export const handleChatMessage = async (req, res) => {
                         responseMessage = `I've checked the inventory, dear! Here is the status:\n\n${statusList}\n\nI'm sorry, but ${outOfStockNames} are currently out of stock or have insufficient quantity. I've alerted the manager to restock them! Is there anything else you'd like?`;
                         data.type = "blocked_order";
                     } else {
-                        // Proceed to draft even if prescription is missing (Soft Warning instead of Block)
-                        const orderItems = orders.map(o => ({
-                            medicineName: o.medicine_name,
-                            quantity: o.quantity,
-                            unit: o.unit || 'tablet',
-                            quantityConverted: o.quantity_converted,
-                            dailyConsumption: o.daily_consumption || 1,
-                            reminderTimes: o.reminder_times || []
-                        }));
+                        // NEW: Check if user is CONFIRMING an existing draft
+                        const confirmationWords = ["yes", "ok", "confirm", "place order", "go ahead", "yep", "do it", "sure", "correct"];
+                        const isConfirmation = confirmationWords.some(word => text.toLowerCase().includes(word));
 
-                        const draftOrder = await createDraftOrder(userId, orderItems);
-                        const itemDetails = draftOrder.items.map(i => `${i.quantity} ${i.unit} ${i.medicineName} (₹${i.pricePerUnit}/unit)`).join(', ');
+                        // Find latest draft for this user
+                        const latestDraft = await PreOrder.findOne({ user: userId, status: 'draft' }).sort({ createdAt: -1 });
 
-                        let prescriptionNote = "";
-                        if (hasPrescriptionRequiredItems && !hasValidPrescription) {
-                            const requiredNames = itemsRequiringPrescription.map(i => i.name).join(', ');
-                            prescriptionNote = `\n\n⚠️ **Note**: ${requiredNames} require a prescription. You can upload it now or after confirming, but we'll need it before delivery! 🛡️`;
-                            data.needs_prescription = true;
+                        if (isConfirmation && latestDraft) {
+                            console.log(`[CHAT] Finalizing order for draft: ${latestDraft._id}`);
+                            await confirmOrder(latestDraft._id, userId);
+
+                            // Use AI message if it looks like a confirmation, otherwise generate one
+                            responseMessage = (data.message && data.message.length > 20) ? data.message : `Wonderful! I've confirmed your order for **${latestDraft.items.map(i => i.medicineName).join(', ')}**. I've also updated your medicine cabinet with these items, dear! 💊`;
+                            data.type = "confirmed_order";
+                            data.order = latestDraft;
+                        } else {
+                            // Proceed to create a NEW draft
+                            const orderItems = orders.map(o => ({
+                                medicineName: o.medicine_name,
+                                quantity: o.quantity,
+                                unit: o.unit || 'tablet',
+                                quantityConverted: o.quantity_converted,
+                                dailyConsumption: o.daily_consumption || 1,
+                                reminderTimes: o.reminder_times || []
+                            }));
+
+                            const draftOrder = await createDraftOrder(userId, orderItems);
+                            const itemDetails = draftOrder.items.map(i => `${i.quantity} ${i.unit} ${i.medicineName} (₹${i.pricePerUnit}/unit)`).join(', ');
+
+                            responseMessage = `Good news! I've prepared your draft:\n\n${statusList}\n\nOrder summary: ${itemDetails}. Total: ₹${draftOrder.totalAmount}. Shall I confirm this for you, dear?`;
+
+                            data.type = "order"; // Ensure type is order so frontend shows confirmation
+                            data.draftOrder = draftOrder;
+                            data.session_id = draftOrder._id;
+                            data.order_id = draftOrder._id;
                         }
-
-                        responseMessage = `Good news! I've prepared your draft:\n\n${statusList}\n${prescriptionNote}\n\nOrder summary: ${itemDetails}. Total: ₹${draftOrder.totalAmount}. Shall I confirm this for you, dear?${reminderNote}`;
-
-                        data.type = "order"; // Ensure type is order so frontend shows confirmation
-                        data.draftOrder = draftOrder;
-                        data.session_id = draftOrder._id;
-                        data.order_id = draftOrder._id;
                     }
                 } catch (orderError) {
                     // Check if it's a stock error or not found error

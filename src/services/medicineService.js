@@ -76,18 +76,61 @@ export const findBestMedicineMatch = async (inputName) => {
     // 1. Exact Case-Insensitive Match
     let match = await Medicine.findOne({ name: { $regex: new RegExp(`^${cleanName}$`, 'i') } });
     if (match) return match;
-    console.log("matched", match);
 
-    // 2. Partial Match (Contains)
-    match = await Medicine.findOne({ name: { $regex: new RegExp(cleanName, 'i') } });
-    if (match) return match;
+    // 2. Partial Match (Contains) - Sort by length to pick the closest match
+    const partialMatches = await Medicine.find({ name: { $regex: new RegExp(cleanName, 'i') } })
+        .sort({ name: 1 })
+        .limit(10);
 
-    // 3. Word-based Token Match (First 2 significant words)
+    if (partialMatches.length > 0) {
+        // Find the one with minimum length difference to the input
+        return partialMatches.sort((a, b) =>
+            Math.abs(a.name.length - cleanName.length) - Math.abs(b.name.length - cleanName.length)
+        )[0];
+    }
+
+    // 3. Word-based Token Match (Significant words)
     const tokens = cleanName.split(/\s+/).filter(t => t.length > 2);
     if (tokens.length > 0) {
-        // Try matching the first word strictly
-        match = await Medicine.findOne({ name: { $regex: new RegExp(`^${tokens[0]}`, 'i') } });
-        if (match) return match;
+        const tokenMatches = await Medicine.find({ name: { $regex: new RegExp(`^${tokens[0]}`, 'i') } })
+            .sort({ name: 1 })
+            .limit(10);
+
+        if (tokenMatches.length > 0) {
+            return tokenMatches.sort((a, b) =>
+                Math.abs(a.name.length - cleanName.length) - Math.abs(b.name.length - cleanName.length)
+            )[0];
+        }
+    }
+
+    // 4. Advanced Fuzzy Similarity (Bigram)
+    const allMeds = await Medicine.find({ currentStock: { $gt: 0 } }).select('name');
+
+    function getSimilarity(s1, s2) {
+        const pairs = (s) => {
+            const res = new Set();
+            for (let i = 0; i < s.length - 1; i++) res.add(s.substring(i, i + 2).toLowerCase());
+            return res;
+        };
+        const pairs1 = pairs(s1);
+        const pairs2 = pairs(s2);
+        const intersection = new Set([...pairs1].filter(x => pairs2.has(x)));
+        return (2.0 * intersection.size) / (pairs1.size + pairs2.size);
+    }
+
+    let bestSimilarityMatch = null;
+    let maxSimilarity = 0;
+
+    for (const med of allMeds) {
+        const sim = getSimilarity(cleanName, med.name);
+        if (sim > maxSimilarity && sim > 0.3) { // 30% threshold
+            maxSimilarity = sim;
+            bestSimilarityMatch = med;
+        }
+    }
+
+    if (bestSimilarityMatch) {
+        return await Medicine.findById(bestSimilarityMatch._id);
     }
 
     return null;

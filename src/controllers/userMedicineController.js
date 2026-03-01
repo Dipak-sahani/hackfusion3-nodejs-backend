@@ -39,46 +39,32 @@ export const getUserMedicines = async (req, res) => {
         });
 
         const refinedList = formattedMedicines.map(item => {
-            const currentDate = new Date();
+            const lowStockThreshold = 10; // Consistent with other checks
 
-            const nextRefillDate = item.nextRefillDate;
-            const stock = item.stock;
-            const lowStockThreshold = 50; // Or fetch from medicine if available
-
-            const daily = item.dailyConsumption || 1;
-            const remainingDuration = Math.ceil(item.stock / daily);
-            const totalDuration = Math.ceil((item.initialTablets || item.stock) / daily);
-
-            // Logic for status
+            // Logic for status - Ensure they match UI constants exactly
             let status = "ACTIVE";
-            const refillGone = item.nextRefillDate && new Date(item.nextRefillDate) < new Date();
 
-            if (refillGone) {
+            if (item.nextRefillDate && new Date(item.nextRefillDate) < new Date()) {
                 status = "EXPIRED";
             } else if (!item.isActive) {
                 status = "PAUSED";
-            } else if (item.stock <= (item.dailyConsumption * 5)) {
+            } else if (item.stock <= lowStockThreshold) {
                 status = "LOW_STOCK";
             }
 
-            const response = {
+            const daily = item.dailyConsumption || 1;
+            const remainingDuration = Math.ceil(item.stock / daily);
+            const totalDuration = item.totalDuration || remainingDuration;
+
+            return {
                 ...item,
-                status: status || "ACTIVE",
-                lowStock: status === "LOW_STOCK",
-                isActive: status !== "PAUSED",
+                status,
                 remainingDuration,
                 totalDuration
             };
-
-            if (status === "EXPIRED") {
-                response.expiredOn = response.nextRefillDate;
-                response.nextRefillDate = null;
-            }
-
-            return response;
         });
 
-        res.json(formattedMedicines);
+        res.json(refinedList);
 
     } catch (error) {
         console.error('Error fetching user medicines:', error);
